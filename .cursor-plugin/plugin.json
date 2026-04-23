@@ -1,7 +1,7 @@
 {
   "name": "r2e",
-  "version": "0.1.0",
-  "description": "Ready-to-eat Cursor rules and skills for cross-repo development",
+  "version": "1.0.0",
+  "description": "Ready-to-eat rules and skills for cross-repo development",
   "author": {
     "name": "liu.hao"
   },
