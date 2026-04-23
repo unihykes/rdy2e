@@ -17,33 +17,6 @@ if "%~1"=="" (
 set "SOURCE_DIR=%~dp0."
 set "TARGET_DIR=%PROJECT_ROOT%\.cursor\plugins\local\r2e"
 
-for %%I in ("%SOURCE_DIR%") do set "SOURCE_ABS=%%~fI"
-for %%I in ("%PROJECT_ROOT%") do set "PROJECT_ROOT_ABS=%%~fI"
-
-set "SOURCE_NORM=!SOURCE_ABS!"
-if "!SOURCE_NORM:~-1!"=="\" set "SOURCE_NORM=!SOURCE_NORM:~0,-1!"
-set "PROJECT_NORM=!PROJECT_ROOT_ABS!"
-if "!PROJECT_NORM:~-1!"=="\" set "PROJECT_NORM=!PROJECT_NORM:~0,-1!"
-
-if /I "!PROJECT_NORM!"=="!SOURCE_NORM!" (
-  echo [ERROR] Invalid install target.
-  echo [ERROR] Project root must not share source path prefix.
-  echo [ERROR] Source: !SOURCE_NORM!
-  echo [ERROR] Project root: !PROJECT_NORM!
-  timeout /t 10 /nobreak >nul
-  exit /b 1
-)
-
-set "PROJECT_AFTER_PREFIX=!PROJECT_NORM:%SOURCE_NORM%\=!"
-if /I not "!PROJECT_AFTER_PREFIX!"=="!PROJECT_NORM!" (
-  echo [ERROR] Invalid install target.
-  echo [ERROR] Project root must not share source path prefix.
-  echo [ERROR] Source: !SOURCE_NORM!
-  echo [ERROR] Project root: !PROJECT_NORM!
-  timeout /t 10 /nobreak >nul
-  exit /b 1
-)
-
 echo Source: %SOURCE_DIR% ^| Target: %TARGET_DIR%
 
 if not exist "%SOURCE_DIR%\.cursor-plugin\plugin.json" (
@@ -62,14 +35,40 @@ if exist "%TARGET_DIR%\" (
   )
 )
 
-robocopy "%SOURCE_DIR%" "%TARGET_DIR%" /e /xf "install.bat" "uninstall.bat" >nul
-set "ROBOCOPY_EXIT=%errorlevel%"
-if %ROBOCOPY_EXIT% GEQ 8 (
-  echo [ERROR] Failed to copy plugin files. ^(robocopy exit code: %ROBOCOPY_EXIT%^) 
+if not exist "%SOURCE_DIR%\rules\" (
+  echo [ERROR] Required directory not found: %SOURCE_DIR%\rules
   timeout /t 10 /nobreak >nul
   exit /b 1
 )
 
+if not exist "%SOURCE_DIR%\skills\" (
+  echo [ERROR] Required directory not found: %SOURCE_DIR%\skills
+  timeout /t 10 /nobreak >nul
+  exit /b 1
+)
+
+mkdir "%TARGET_DIR%" >nul 2>&1
+
+call :copy_dir ".cursor-plugin"
+if errorlevel 1 exit /b 1
+
+call :copy_dir "rules"
+if errorlevel 1 exit /b 1
+
+call :copy_dir "skills"
+if errorlevel 1 exit /b 1
+
 echo Plugin installed successfully. Please restart Cursor
 timeout /t 10 /nobreak >nul
+exit /b 0
+
+:copy_dir
+set "COPY_NAME=%~1"
+robocopy "%SOURCE_DIR%\%COPY_NAME%" "%TARGET_DIR%\%COPY_NAME%" /e >nul
+set "ROBOCOPY_EXIT=%errorlevel%"
+if %ROBOCOPY_EXIT% GEQ 8 (
+  echo [ERROR] Failed to copy %COPY_NAME%. ^(robocopy exit code: %ROBOCOPY_EXIT%^) 
+  timeout /t 10 /nobreak >nul
+  exit /b 1
+)
 exit /b 0
