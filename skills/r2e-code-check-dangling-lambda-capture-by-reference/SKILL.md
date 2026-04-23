@@ -1,6 +1,6 @@
 ---
-name: r2e-code-review-dangling-lambda-capture-by-reference
-description: 当用户输入 code review 时触发
+name: r2e-code-check-dangling-lambda-capture-by-reference
+description: 当用户输入 code check 时触发
 disable-model-invocation: true
 ---
 

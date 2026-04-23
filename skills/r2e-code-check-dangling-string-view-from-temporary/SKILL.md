@@ -1,6 +1,6 @@
 ---
-name: r2e-code-review-dangling-string-view-from-temporary
-description: 当用户输入 code review 时触发
+name: r2e-code-check-dangling-string-view-from-temporary
+description: 当用户输入 code check 时触发
 disable-model-invocation: true
 ---
 
