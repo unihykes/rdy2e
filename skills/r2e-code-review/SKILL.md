@@ -7,4 +7,5 @@ disable-model-invocation: true
 ## 指令
 
 - 执行技能 /r2e-code-review-use-after-move
+- 执行技能 /r2e-code-review-dangling-reference-to-temporary
 - 执行技能 /r2e-code-review-sensitive-data-exposure
