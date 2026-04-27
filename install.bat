@@ -44,6 +44,9 @@ if errorlevel 1 exit /b 1
 call :copy_dir "agents"
 if errorlevel 1 exit /b 1
 
+call :copy_dir "commands"
+if errorlevel 1 exit /b 1
+
 echo Plugin installed successfully. Please restart Cursor
 timeout /t 10 /nobreak >nul
 exit /b 0
