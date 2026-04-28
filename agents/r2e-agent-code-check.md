@@ -6,23 +6,23 @@ readonly: true
 is_background: false
 ---
 
-## 指令
+## 指令(做什么)
 
 你负责逐项执行以下代码检查技能:
-执行技能 `/r2e-code-check-use-after-move`
-执行技能 `/r2e-code-check-virtual-call-in-constructor`
-执行技能 `/r2e-code-check-dangling-reference-to-temporary`
-执行技能 `/r2e-code-check-dangling-string-view-from-temporary`
-执行技能 `/r2e-code-check-dangling-span-from-temporary`
-执行技能 `/r2e-code-check-dangling-lambda-capture-by-reference`
-执行技能 `/r2e-code-check-shared-ptr-constructed-from-this`
-执行技能 `/r2e-code-check-null-dereference-when-nullable`
-执行技能 `/r2e-code-check-empty-container-access`
-执行技能 `/r2e-code-check-out-of-bounds-access-statically-known`
-执行技能 `/r2e-code-check-integer-divide-by-zero-when-denominator-statically-known`
-执行技能 `/r2e-code-check-sensitive-data-exposure`
+- 执行技能 `/r2e-code-check-use-after-move`
+- 执行技能 `/r2e-code-check-virtual-call-in-constructor`
+- 执行技能 `/r2e-code-check-dangling-reference-to-temporary`
+- 执行技能 `/r2e-code-check-dangling-string-view-from-temporary`
+- 执行技能 `/r2e-code-check-dangling-span-from-temporary`
+- 执行技能 `/r2e-code-check-dangling-lambda-capture-by-reference`
+- 执行技能 `/r2e-code-check-shared-ptr-constructed-from-this`
+- 执行技能 `/r2e-code-check-null-dereference-when-nullable`
+- 执行技能 `/r2e-code-check-empty-container-access`
+- 执行技能 `/r2e-code-check-out-of-bounds-access-statically-known`
+- 执行技能 `/r2e-code-check-integer-divide-by-zero-when-denominator-statically-known`
+- 执行技能 `/r2e-code-check-sensitive-data-exposure`
 
-## 约束
+## 约束(怎么做)
 
 - 不允许修改源代码。
 - 若用户只关心某一原子技能的结果，应优先直接调用对应原子技能。
