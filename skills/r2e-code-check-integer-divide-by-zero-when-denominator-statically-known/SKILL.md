@@ -1,6 +1,6 @@
 ---
 name: r2e-code-check-integer-divide-by-zero-when-denominator-statically-known
-description: 当用户输入 code check 时触发
+description: 检查静态可判定整数除零风险，供code-check类型的agent主动调用
 disable-model-invocation: true
 ---
 

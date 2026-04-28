@@ -1,6 +1,6 @@
 ---
 name: r2e-code-check-dangling-reference-to-temporary
-description: 当用户输入 code check 时触发
+description: 检查引用绑定临时对象悬垂风险，供code-check类型的agent主动调用
 disable-model-invocation: true
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: r2e-code-check-dangling-lambda-capture-by-reference
-description: 当用户输入 code check 时触发
+description: 检查 lambda 引用捕获导致悬垂风险，供code-check类型的agent主动调用
 disable-model-invocation: true
 ---
 

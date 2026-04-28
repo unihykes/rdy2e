@@ -1,6 +1,6 @@
 ---
 name: r2e-code-check-out-of-bounds-access-statically-known
-description: 当用户输入 code check 时触发
+description: 检查静态可判定越界访问风险，供code-check类型的agent主动调用
 disable-model-invocation: true
 ---
 
