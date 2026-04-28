@@ -8,6 +8,8 @@ disable-model-invocation: true
 
 你仅允许执行以下代码优化技能:
 - 执行技能 `/r2e-code-optimize-unused-code-symbols`
+- 执行技能 `/r2e-code-optimize-unnecessary-copy`
+- 执行技能 `/r2e-code-optimize-unnecessary-temporary-object`
 
 ## 约束(怎么做)
 
@@ -17,4 +19,5 @@ disable-model-invocation: true
 ## 输出
 
 - 按照技能类别向调用方输出结果，包含优化点、影响说明与建议动作。
+- 代码位置需要明确到具体的文件和行号。
 - 未发现可优化项时无需输出。
