@@ -1,14 +1,12 @@
 ---
-name: r2e-agent-code-optimize
-description: C++ 代码优化, 在用户要求代码优化、代码清理或降噪整理时使用
-model: inherit
-readonly: true
-is_background: false
+name: r2e-code-optimize
+description: C++ 代码优化编排技能，在用户要求代码优化、代码清理或降噪整理时使用
+disable-model-invocation: true
 ---
 
 ## 指令(做什么)
 
-你负责逐项执行以下代码优化技能:
+你仅允许执行以下代码优化技能:
 - 执行技能 `/r2e-code-optimize-unused-code-symbols`
 
 ## 约束(怎么做)

@@ -11,7 +11,7 @@ disable-model-invocation: true
 
 ## 约束(怎么做)
 
-- 暂无约束
+- [排除] 暂无
 
 ## 示例
 

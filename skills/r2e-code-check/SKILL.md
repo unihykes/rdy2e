@@ -1,14 +1,12 @@
 ---
-name: r2e-agent-code-check
-description: C++ 代码检查, 在用户要求 code check 或代码审查时使用
-model: inherit
-readonly: true
-is_background: false
+name: r2e-code-check
+description: C++ 代码检查，在用户要求 code check 或代码审查时使用
+disable-model-invocation: true
 ---
 
 ## 指令(做什么)
 
-你负责逐项执行以下代码检查技能:
+你仅允许执行以下代码检查技能:
 - 执行技能 `/r2e-code-check-use-after-move`
 - 执行技能 `/r2e-code-check-virtual-call-in-constructor`
 - 执行技能 `/r2e-code-check-dangling-reference-to-temporary`
@@ -30,4 +28,4 @@ is_background: false
 ## 输出
 
 - 按照技能类别向调用方输出结果，包含各检查项的结论、问题与建议。
-- 检查结果无问题时无需输出.
+- 检查结果无问题时无需输出。
