@@ -24,13 +24,14 @@ is_background: false
 2. 执行技能 `/r2e-code-check-virtual-call-in-constructor`
 3. 执行技能 `/r2e-code-check-dangling-reference-to-temporary`
 4. 执行技能 `/r2e-code-check-dangling-string-view-from-temporary`
-5. 执行技能 `/r2e-code-check-dangling-lambda-capture-by-reference`
-6. 执行技能 `/r2e-code-check-shared-ptr-constructed-from-this`
-7. 执行技能 `/r2e-code-check-null-dereference-when-nullable`
-8. 执行技能 `/r2e-code-check-empty-container-access`
-9. 执行技能 `/r2e-code-check-out-of-bounds-access-statically-known`
-10. 执行技能 `/r2e-code-check-integer-divide-by-zero-when-denominator-statically-known`
-11. 执行技能 `/r2e-code-check-sensitive-data-exposure`
+5. 执行技能 `/r2e-code-check-dangling-span-from-temporary`
+6. 执行技能 `/r2e-code-check-dangling-lambda-capture-by-reference`
+7. 执行技能 `/r2e-code-check-shared-ptr-constructed-from-this`
+8. 执行技能 `/r2e-code-check-null-dereference-when-nullable`
+9. 执行技能 `/r2e-code-check-empty-container-access`
+10. 执行技能 `/r2e-code-check-out-of-bounds-access-statically-known`
+11. 执行技能 `/r2e-code-check-integer-divide-by-zero-when-denominator-statically-known`
+12. 执行技能 `/r2e-code-check-sensitive-data-exposure`
 
 ## 约束
 
