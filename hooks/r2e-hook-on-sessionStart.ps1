@@ -14,40 +14,65 @@ param()
 
 . (Join-Path $PSScriptRoot "r2e-hook-common.ps1")
 
+class R2eHookSessionStartInputBody {
+  [string]$session_id
+  [bool]$is_background_agent
+  [string]$composer_mode
+
+  [string] ToJsonString() {
+    return (@{
+        session_id          = $this.session_id
+        is_background_agent = $this.is_background_agent
+        composer_mode       = $this.composer_mode
+      } | ConvertTo-Json -Compress -Depth 20)
+  }
+}
+
 function Edit-HookInputBody {
-  # sessionStart：将 JSON body 中的 session_id 截成第一段（与 conversation_id 短前缀对齐）。
   param(
     [Parameter(Mandatory = $true)]
     [AllowEmptyString()]
-    [string]$Body
+    [string]$BodyStr
   )
-  if ([string]::IsNullOrWhiteSpace($Body)) {
-    return $Body
+  if ([string]::IsNullOrWhiteSpace($BodyStr)) {
+    return $null
   }
   try {
-    $obj = $Body | ConvertFrom-Json
-    if ($obj.PSObject.Properties["session_id"] -and $obj.session_id -is [string]) {
+    $obj = $BodyStr | ConvertFrom-Json
+    $inst = [R2eHookSessionStartInputBody]::new()
+    if ($obj.PSObject.Properties["session_id"]) {
       $sid = [string]$obj.session_id
-      if (-not [string]::IsNullOrWhiteSpace($sid)) {
-        $obj.session_id = ($sid -split "-", 2)[0]
+      $inst.session_id = if (-not [string]::IsNullOrWhiteSpace($sid)) {
+        ($sid -split "-", 2)[0]
+      }
+      else {
+        $sid
       }
     }
-    return ($obj | ConvertTo-Json -Compress -Depth 20)
+    if ($obj.PSObject.Properties["is_background_agent"]) {
+      $inst.is_background_agent = [bool]$obj.is_background_agent
+    }
+    if ($obj.PSObject.Properties["composer_mode"]) {
+      $inst.composer_mode = [string]$obj.composer_mode
+    }
+    return $inst
   }
   catch {
-    return $Body
+    return $null
   }
 }
 
 function Build-HookResponse {
-  # 默认发送空对象 {}，表示不改变环境与上下文；可按需传入 -Env / -AdditionalContext。
+  # 默认发送空对象 {}，表示不改变环境与上下文；可按需传入 -Env / -AdditionalContext / -Body。
   [CmdletBinding()]
   param(
     [Parameter(Mandatory = $false)]
     [hashtable]$Env,
     [Parameter(Mandatory = $false)]
     [AllowEmptyString()]
-    [string]$AdditionalContext
+    [string]$AdditionalContext,
+    [Parameter(Mandatory = $false)]
+    [R2eHookSessionStartInputBody]$Body
   )
   $out = @{}
   if ($null -ne $Env -and $Env.Count -gt 0) {
@@ -59,16 +84,23 @@ function Build-HookResponse {
       $out.additional_context = $AdditionalContext
     }
   }
+  # 预留：按 $Body（如 composer_mode / is_background_agent）填充 env 或其它应答字段。
   return ($out | ConvertTo-Json -Compress -Depth 20)
 }
 
 Set-HookOutputUtf8
-$head, $body = Get-HookInputHeadAndBody
-$body = Edit-HookInputBody -Body $body
-Log-HookEvent -Head $head -Body $body -IsValidJson $head.IsValidJson
+$head, $bodyStr = Get-HookInputHeadAndBody
+$body = Edit-HookInputBody -BodyStr $bodyStr
+$bodyLog = if ($null -ne $body) {
+  $body.ToJsonString()
+}
+else {
+  $bodyStr
+}
+Log-HookEvent -Head $head -BodyLog $bodyLog -IsValidJson $head.IsValidJson
 
-#usage: $response = Build-HookResponse -Env @{a=1} -AdditionalContext "session_start"; Write-Output $response
-$response = Build-HookResponse
+#usage: $response = Build-HookResponse -Env @{a=1} -AdditionalContext "session_start" -Body $body; Write-Output $response
+$response = Build-HookResponse -Body $body
 Write-Output $response
 exit 0
 

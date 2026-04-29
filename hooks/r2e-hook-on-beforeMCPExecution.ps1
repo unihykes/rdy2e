@@ -5,16 +5,16 @@
 
 function Edit-HookInputBody {
   <#
-    各 hook 可在 dot-source 本文件之后重新定义同名函数，对 Body（JSON 字符串）做二次处理。
-    默认实现为 no-op，直接返回 Body。
+    各 hook 可在 dot-source 本文件之后重新定义同名函数，对 BodyStr（JSON 字符串）做二次处理。
+    默认实现为 no-op，直接返回 BodyStr。
   #>
   param(
     [Parameter(Mandatory = $true)]
     [AllowEmptyString()]
-    [string]$Body
+    [string]$BodyStr
   )
 
-  return $Body
+  return $BodyStr
 }
 
 function Build-HookResponse {
@@ -32,9 +32,9 @@ function Build-HookResponse {
 
 # Hook: beforeMCPExecution
 Set-HookOutputUtf8
-$head, $body = Get-HookInputHeadAndBody
-$body = Edit-HookInputBody -Body $body
-Log-HookEvent -Head $head -Body $body -IsValidJson $head.IsValidJson
+$head, $bodyStr = Get-HookInputHeadAndBody
+$body = Edit-HookInputBody -BodyStr $bodyStr
+Log-HookEvent -Head $head -BodyLog $body -IsValidJson $head.IsValidJson
 $response = Build-HookResponse
 Write-Output $response
 exit 0

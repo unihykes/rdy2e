@@ -130,7 +130,7 @@ function Log-HookEvent {
     [R2eHookInputHead]$Head,
     [Parameter(Mandatory = $true)]
     [AllowEmptyString()]
-    [string]$Body,
+    [string]$BodyLog,
     [Parameter(Mandatory = $true)]
     [bool]$IsValidJson
   )
@@ -153,35 +153,9 @@ function Log-HookEvent {
   $linePrefix = "[$timestamp][$($Head.WorkspaceName)][$conversationIdShort][$generationIdShort][$($Head.ModelName)][$($Head.HookEventName)]"
 
   if ($IsValidJson) {
-    Add-Content -Path $filePath -Value "$LinePrefix $Body" -Encoding utf8
+    Add-Content -Path $filePath -Value "$LinePrefix $BodyLog" -Encoding utf8
   }
   else {
     Add-Content -Path $filePath -Value "$LinePrefix invalid json" -Encoding utf8
   }
-}
-
-function Edit-HookInputBody {
-  <#
-    各 hook 可在 dot-source 本文件之后重新定义同名函数，对 Body（JSON 字符串）做二次处理。
-    默认实现为 no-op，直接返回 Body。
-  #>
-  param(
-    [Parameter(Mandatory = $true)]
-    [AllowEmptyString()]
-    [string]$Body
-  )
-
-  return $Body
-}
-
-function Build-HookResponse {
-  <#
-    生成传给 Cursor hook 的应答 JSON 字符串（不写 stdout）；调用方对返回值自行 Write-Output。
-    默认：permission 放行。
-  #>
-  $payload = @{
-    permission = "allow"
-    user_message = "ok"
-  }
-  return ($payload | ConvertTo-Json -Compress)
 }
