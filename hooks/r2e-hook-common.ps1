@@ -120,55 +120,10 @@ function Get-HookProjectDir {
   return $projectDir
 }
 
-function Get-HookEventsFilePath {
-  param(
-    [Parameter(Mandatory = $true)]
-    [string]$ProjectDir
-  )
-  $dir = Join-Path $ProjectDir ".cursor/log"
-  return (Join-Path $dir "r2e-hook-events.log")
-}
-
-function Format-HookInputHeadLinePrefix {
-  <#
-    根据 Head（R2eHookInputHead）生成写入 r2e-hook-events.log 时的行首固定段：
-    [时间戳][工作区][conversationId 短][generationId 短][model][hook_event_name]
-  #>
-  param(
-    [Parameter(Mandatory = $true)]
-    [R2eHookInputHead]$Head
-  )
-
-  $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
-  $conversationIdShort = [string]$Head.ConversationId
-  if (-not [string]::IsNullOrWhiteSpace($conversationIdShort)) {
-    $conversationIdShort = ($conversationIdShort -split "-", 2)[0]
-  }
-  $generationIdShort = [string]$Head.GenerationId
-  if (-not [string]::IsNullOrWhiteSpace($generationIdShort)) {
-    $generationIdShort = ($generationIdShort -split "-", 2)[0]
-  }
-  return "[$timestamp][$($Head.WorkspaceName)][$conversationIdShort][$generationIdShort][$($Head.ModelName)][$($Head.HookEventName)]"
-}
-
 function Edit-HookInputBody {
   <#
     各 hook 可在 dot-source 本文件之后重新定义同名函数，对 Body（JSON 字符串）做二次处理。
-    默认原样返回；由 Invoke-HookInputBodyEdit 在有效 JSON 条件下统一调用。
-  #>
-  param(
-    [Parameter(Mandatory = $true)]
-    [AllowEmptyString()]
-    [string]$Body
-  )
-  return $Body
-}
-
-function Invoke-HookInputBodyEdit {
-  <#
-    统一处理各 hook 对 Body 的二次编辑：
-    - 仅当 Head.IsValidJson 为 true 时调用 Edit-HookInputBody
-    - 无效 JSON 时原样返回，避免各 on-*.ps1 重复 if 判定
+    统一在本函数内基于 Head.IsValidJson 做判定：仅有效 JSON 才进入自定义编辑逻辑。
   #>
   param(
     [Parameter(Mandatory = $true)]
@@ -179,17 +134,19 @@ function Invoke-HookInputBodyEdit {
   )
 
   if ($Head.IsValidJson) {
-    return (Edit-HookInputBody -Body $Body)
+    return $Body
   }
   return $Body
 }
 
-function Add-HookEventsFileLine {
+function Log-HookEvent {
+  <#
+    写入一行到 r2e-hook-events.log，行首固定段在函数内基于 Head 统一生成：
+    [时间戳][工作区][conversationId 短][generationId 短][model][hook_event_name]
+  #>
   param(
     [Parameter(Mandatory = $true)]
-    [string]$ProjectDir,
-    [Parameter(Mandatory = $true)]
-    [string]$LinePrefix,
+    [R2eHookInputHead]$Head,
     [Parameter(Mandatory = $true)]
     [AllowEmptyString()]
     [string]$Body,
@@ -197,9 +154,22 @@ function Add-HookEventsFileLine {
     [bool]$IsValidJson
   )
 
-  $filePath = Get-HookEventsFilePath -ProjectDir $ProjectDir
+  $projectDir = Get-HookProjectDir
+  $dir = Join-Path $projectDir ".cursor/log"
+  $filePath = Join-Path $dir "r2e-hook-events.log"
   $parentDir = Split-Path -Path $filePath -Parent
   New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
+
+  $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+  $conversationIdShort = [string]$Head.ConversationId
+  if (-not [string]::IsNullOrWhiteSpace($conversationIdShort)) {
+    $conversationIdShort = ($conversationIdShort -split "-", 2)[0]
+  }
+  $generationIdShort = [string]$Head.GenerationId
+  if (-not [string]::IsNullOrWhiteSpace($generationIdShort)) {
+    $generationIdShort = ($generationIdShort -split "-", 2)[0]
+  }
+  $linePrefix = "[$timestamp][$($Head.WorkspaceName)][$conversationIdShort][$generationIdShort][$($Head.ModelName)][$($Head.HookEventName)]"
 
   if ($IsValidJson) {
     Add-Content -Path $filePath -Value "$LinePrefix $Body" -Encoding utf8

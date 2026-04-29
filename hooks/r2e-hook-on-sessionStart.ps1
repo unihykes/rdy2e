@@ -1,16 +1,13 @@
-<# 
+﻿<# 
 Hook: sessionStart
-在创建新的 composer 会话时调用。此 hook 以即发即忘方式运行；agent 循环不会等待其完成，也不会强制要求阻塞式响应。
-使用此 hook 来设置会话专属环境变量或注入额外上下文。
+鍦ㄥ垱寤烘柊鐨?composer 浼氳瘽鏃惰皟鐢ㄣ€傛 hook 浠ュ嵆鍙戝嵆蹇樻柟寮忚繍琛岋紱agent 寰幆涓嶄細绛夊緟鍏跺畬鎴愶紝涔熶笉浼氬己鍒惰姹傞樆濉炲紡鍝嶅簲銆?浣跨敤姝?hook 鏉ヨ缃細璇濅笓灞炵幆澧冨彉閲忔垨娉ㄥ叆棰濆涓婁笅鏂囥€?
+杈撳叆瀛楁	绫诲瀷	鎻忚堪
+session_id	string	姝や細璇濈殑鍞竴鏍囪瘑绗?(涓?conversation_id 鐩稿悓)
+is_background_agent	boolean	璇ヤ細璇濇槸鍚庡彴 agent 浼氳瘽杩樻槸浜や簰寮忎細璇?composer_mode	string (optional)	composer 鍚姩鏃剁殑妯″紡 (渚嬪 "agent"銆?ask"銆?edit")
 
-输入字段	类型	描述
-session_id	string	此会话的唯一标识符 (与 conversation_id 相同)
-is_background_agent	boolean	该会话是后台 agent 会话还是交互式会话
-composer_mode	string (optional)	composer 启动时的模式 (例如 "agent"、"ask"、"edit")
-
-输出字段	类型	描述
-env	object (optional)	为此会话设置的环境变量。对后续所有 hook 的执行均可用
-additional_context	string (optional)	要添加到对话初始系统上下文中的额外上下文
+杈撳嚭瀛楁	绫诲瀷	鎻忚堪
+env	object (optional)	涓烘浼氳瘽璁剧疆鐨勭幆澧冨彉閲忋€傚鍚庣画鎵€鏈?hook 鐨勬墽琛屽潎鍙敤
+additional_context	string (optional)	瑕佹坊鍔犲埌瀵硅瘽鍒濆绯荤粺涓婁笅鏂囦腑鐨勯澶栦笂涓嬫枃
 #>
 
 param()
@@ -18,8 +15,9 @@ param()
 . (Join-Path $PSScriptRoot "r2e-hook-common.ps1")
 
 function Edit-HookInputBody {
-  # 对 stdin 解析后的 Body（JSON 字符串）做二次处理
-  param(
+  # 瀵?stdin 瑙ｆ瀽鍚庣殑 Body锛圝SON 瀛楃涓诧級鍋氫簩娆″鐞?  param(
+    [Parameter(Mandatory = $true)]
+    [R2eHookInputHead]$Head,
     [Parameter(Mandatory = $true)]
     [AllowEmptyString()]
     [string]$Body
@@ -39,8 +37,7 @@ function Edit-HookInputBody {
 }
 
 function Write-HookAllowResponse {
-  # 默认发送空对象 {}，表示不改变环境与上下文。
-  [CmdletBinding()]
+  # 榛樿鍙戦€佺┖瀵硅薄 {}锛岃〃绀轰笉鏀瑰彉鐜涓庝笂涓嬫枃銆?  [CmdletBinding()]
   param(
     [Parameter(Mandatory = $false)]
     [hashtable]$Env,
@@ -63,11 +60,11 @@ function Write-HookAllowResponse {
 
 Set-HookOutputUtf8
 $head, $body = Get-HookInputHeadAndBody
-$projectDir = Get-HookProjectDir
-$linePrefix = Format-HookInputHeadLinePrefix -Head $head
-$body = Invoke-HookInputBodyEdit -Head $head -Body $body
-Add-HookEventsFileLine -ProjectDir $projectDir -LinePrefix $linePrefix -Body $body -IsValidJson $head.IsValidJson
+$body = Edit-HookInputBody -Head $head -Body $body
+Log-HookEvent -Head $head -Body $body -IsValidJson $head.IsValidJson
 
 #usage: Write-HookAllowResponse -Env @{a=1} -AdditionalContext "session_start"
 Write-HookAllowResponse
 exit 0
+
+
