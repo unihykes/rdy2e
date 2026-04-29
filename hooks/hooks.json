@@ -1,0 +1,109 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\hooks\\r2e-hook-example.ps1",
+        "type": "command",
+        "timeout": 10,
+        "failClosed": false
+      }
+    ],
+    "sessionEnd": [
+      {
+        "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\hooks\\r2e-hook-example.ps1"
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\hooks\\r2e-hook-example.ps1"
+      }
+    ],
+    "postToolUse": [
+      {
+        "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\hooks\\r2e-hook-example.ps1"
+      }
+    ],
+    "postToolUseFailure": [
+      {
+        "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\hooks\\r2e-hook-example.ps1"
+      }
+    ],
+    "subagentStart": [
+      {
+        "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\hooks\\r2e-hook-example.ps1"
+      }
+    ],
+    "subagentStop": [
+      {
+        "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\hooks\\r2e-hook-example.ps1",
+        "loop_limit": 5
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\hooks\\r2e-hook-example.ps1"
+      }
+    ],
+    "afterShellExecution": [
+      {
+        "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\hooks\\r2e-hook-example.ps1"
+      }
+    ],
+    "beforeMCPExecution": [
+      {
+        "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\hooks\\r2e-hook-example.ps1"
+      }
+    ],
+    "afterMCPExecution": [
+      {
+        "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\hooks\\r2e-hook-example.ps1"
+      }
+    ],
+    "beforeReadFile": [
+      {
+        "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\hooks\\r2e-hook-example.ps1"
+      }
+    ],
+    "afterFileEdit": [
+      {
+        "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\hooks\\r2e-hook-example.ps1"
+      }
+    ],
+    "beforeSubmitPrompt": [
+      {
+        "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\hooks\\r2e-hook-example.ps1"
+      }
+    ],
+    "preCompact": [
+      {
+        "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\hooks\\r2e-hook-example.ps1"
+      }
+    ],
+    "stop": [
+      {
+        "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\hooks\\r2e-hook-example.ps1"
+      }
+    ],
+    "afterAgentResponse": [
+      {
+        "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\hooks\\r2e-hook-example.ps1"
+      }
+    ],
+    "afterAgentThought": [
+      {
+        "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\hooks\\r2e-hook-example.ps1"
+      }
+    ],
+    "beforeTabFileRead": [
+      {
+        "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\hooks\\r2e-hook-example.ps1"
+      }
+    ],
+    "afterTabFileEdit": [
+      {
+        "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\hooks\\r2e-hook-example.ps1"
+      }
+    ]
+  }
+}

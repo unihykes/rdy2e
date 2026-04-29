@@ -1,12 +1,16 @@
 {
   "name": "r2e",
-  "version": "1.1.0",
-  "description": "Ready-to-eat rules and skills for cross-repo development",
+  "description": "ready-to-eat plugin for cross-repo development",
+  "version": "1.0.1",
   "author": {
-    "name": "liu.hao"
+    "name": "liu.hao",
+    "email": "liu.hao@aishu.cn"
   },
+  "homepage": "https://github.com/unihykes/rdy2e",
+  "repository": "https://github.com/unihykes/rdy2e",
   "rules": "rules",
-  "skills": "skills",
   "agents": "agents",
-  "commands": "commands"
+  "skills": "skills",
+  "commands": "commands",
+  "hooks": "hooks/hooks.json"
 }
