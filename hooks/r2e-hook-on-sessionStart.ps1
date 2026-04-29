@@ -15,13 +15,15 @@ param()
 . (Join-Path $PSScriptRoot "r2e-hook-common.ps1")
 
 function Edit-HookInputBody {
-  # 瀵?stdin 瑙ｆ瀽鍚庣殑 Body锛圝SON 瀛楃涓诧級鍋氫簩娆″鐞?  param(
-    [Parameter(Mandatory = $true)]
-    [R2eHookInputHead]$Head,
+  # sessionStart：将 JSON body 中的 session_id 截成第一段（与 conversation_id 短前缀对齐）。
+  param(
     [Parameter(Mandatory = $true)]
     [AllowEmptyString()]
     [string]$Body
   )
+  if ([string]::IsNullOrWhiteSpace($Body)) {
+    return $Body
+  }
   try {
     $obj = $Body | ConvertFrom-Json
     if ($obj.PSObject.Properties["session_id"] -and $obj.session_id -is [string]) {
@@ -31,13 +33,15 @@ function Edit-HookInputBody {
       }
     }
     return ($obj | ConvertTo-Json -Compress -Depth 20)
-  } catch {
+  }
+  catch {
     return $Body
   }
 }
 
-function Write-HookAllowResponse {
-  # 榛樿鍙戦€佺┖瀵硅薄 {}锛岃〃绀轰笉鏀瑰彉鐜涓庝笂涓嬫枃銆?  [CmdletBinding()]
+function Build-HookResponse {
+  # 默认发送空对象 {}，表示不改变环境与上下文；可按需传入 -Env / -AdditionalContext。
+  [CmdletBinding()]
   param(
     [Parameter(Mandatory = $false)]
     [hashtable]$Env,
@@ -55,16 +59,17 @@ function Write-HookAllowResponse {
       $out.additional_context = $AdditionalContext
     }
   }
-  $out | ConvertTo-Json -Compress -Depth 20
+  return ($out | ConvertTo-Json -Compress -Depth 20)
 }
 
 Set-HookOutputUtf8
 $head, $body = Get-HookInputHeadAndBody
-$body = Edit-HookInputBody -Head $head -Body $body
+$body = Edit-HookInputBody -Body $body
 Log-HookEvent -Head $head -Body $body -IsValidJson $head.IsValidJson
 
-#usage: Write-HookAllowResponse -Env @{a=1} -AdditionalContext "session_start"
-Write-HookAllowResponse
+#usage: $response = Build-HookResponse -Env @{a=1} -AdditionalContext "session_start"; Write-Output $response
+$response = Build-HookResponse
+Write-Output $response
 exit 0
 
 

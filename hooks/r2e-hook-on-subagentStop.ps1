@@ -5,9 +5,12 @@
 # Hook: subagentStop
 Set-HookOutputUtf8
 $head, $body = Get-HookInputHeadAndBody
-$body = Edit-HookInputBody -Head $head -Body $body
+$body = Edit-HookInputBody -Body $body
 Log-HookEvent -Head $head -Body $body -IsValidJson $head.IsValidJson
-Write-HookAllowResponse
+$response = Build-HookResponse
+Write-Output $response
 exit 0
+
+
 
 
