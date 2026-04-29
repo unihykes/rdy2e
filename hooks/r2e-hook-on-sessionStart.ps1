@@ -17,6 +17,50 @@ param()
 
 . (Join-Path $PSScriptRoot "r2e-hook-common.ps1")
 
+function Edit-HookLogBody {
+  # 对 body 做二次剪裁
+  param(
+    [Parameter(Mandatory = $true)]
+    [AllowEmptyString()]
+    [string]$Body
+  )
+  try {
+    $obj = $Body | ConvertFrom-Json
+    if ($obj.PSObject.Properties["session_id"] -and $obj.session_id -is [string]) {
+      $sid = [string]$obj.session_id
+      if (-not [string]::IsNullOrWhiteSpace($sid)) {
+        $obj.session_id = ($sid -split "-", 2)[0]
+      }
+    }
+    return ($obj | ConvertTo-Json -Compress -Depth 20)
+  } catch {
+    return $Body
+  }
+}
+
+function Write-HookAllowResponse {
+  # 默认发送空对象 {}，表示不改变环境与上下文。
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $false)]
+    [hashtable]$Env,
+    [Parameter(Mandatory = $false)]
+    [AllowEmptyString()]
+    [string]$AdditionalContext
+  )
+  $out = @{}
+  if ($null -ne $Env -and $Env.Count -gt 0) {
+    $out.env = $Env
+  }
+  if ($null -ne $AdditionalContext) {
+    $trimmed = $AdditionalContext.Trim()
+    if ($trimmed.Length -gt 0) {
+      $out.additional_context = $AdditionalContext
+    }
+  }
+  $out | ConvertTo-Json -Compress -Depth 20
+}
+
 Set-HookOutputUtf8
 $rawInput = Read-HookRawInput
 $logData = Get-HookLogData -RawInput $rawInput
@@ -27,5 +71,7 @@ if ($logData.IsValidJson) {
   $body = Edit-HookLogBody -Body $body
 }
 Add-HookLogLine -ProjectDir $projectDir -Head $head -Body $body -IsValidJson $logData.IsValidJson
+
+#usage: Write-HookAllowResponse -Env @{a=1} -AdditionalContext "session_start"
 Write-HookAllowResponse
 exit 0
