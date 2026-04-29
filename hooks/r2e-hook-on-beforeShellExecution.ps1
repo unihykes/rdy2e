@@ -4,7 +4,7 @@ param()
 
 # Hook: beforeShellExecution
 Set-HookOutputUtf8
-$head, $body = Read-HookInputHeadAndBody
+$head, $body = Get-HookInputHeadAndBody
 $projectDir = Get-HookProjectDir
 $linePrefix = Format-HookInputHeadLinePrefix -Head $head
 $body = Invoke-HookInputBodyEdit -Head $head -Body $body

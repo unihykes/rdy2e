@@ -13,33 +13,22 @@ function Set-HookOutputUtf8 {
   [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 }
 
-function Read-HookInputHeadAndBody {
+function Get-HookInputHeadAndBody {
   <#
-    从 stdin 读取 hook 原始 JSON（去掉可能存在的 UTF-8 BOM），解析为 R2eHookInputHead 与脱敏后的 Body（JSON 字符串）。
-    各 on-*.ps1 可一行完成读入与解析。
+    从 stdin 读取 hook 原始 JSON（去掉可能存在的 UTF-8 BOM），并解析出两个值：
+    Head（R2eHookInputHead，官方基础字段）与 Body（脱敏/裁剪后的 JSON 或原文，事件特有部分）。
   #>
   $stdin = [Console]::OpenStandardInput()
   $reader = New-Object System.IO.StreamReader($stdin, [System.Text.UTF8Encoding]::new($false), $true)
   $rawInput = $reader.ReadToEnd()
   $rawInput = $rawInput.TrimStart([char]0xFEFF)
   $reader.Dispose()
-  return Get-HookInputHeadAndBody -RawInput $rawInput
-}
-
-function Get-HookInputHeadAndBody {
-  <#
-    从 hook stdin 原始字符串解析出两个值：Head（R2eHookInputHead，官方基础字段）与 Body（脱敏/裁剪后的 JSON 或原文，事件特有部分）。
-  #>
-  param(
-    [Parameter(Mandatory = $true)]
-    [string]$RawInput
-  )
 
   $head = [R2eHookInputHead]::new()
-  $bodyStr = $RawInput
+  $bodyStr = $rawInput
 
   try {
-    $obj = $RawInput | ConvertFrom-Json
+    $obj = $rawInput | ConvertFrom-Json
     if ($obj.PSObject.Properties["conversation_id"] -and $obj.conversation_id -is [string]) {
       $head.ConversationId = $obj.conversation_id
       $obj.PSObject.Properties.Remove("conversation_id")
@@ -95,16 +84,16 @@ function Get-HookInputHeadAndBody {
     $bodyStr = $obj | ConvertTo-Json -Compress -Depth 20
   } catch {
     $head.IsValidJson = $false
-    $bodyStr = $RawInput
-    $m = [System.Text.RegularExpressions.Regex]::Match($RawInput, '"conversation_id"\s*:\s*"([^"]*)"')
+    $bodyStr = $rawInput
+    $m = [System.Text.RegularExpressions.Regex]::Match($rawInput, '"conversation_id"\s*:\s*"([^"]*)"')
     if ($m.Success) { $head.ConversationId = $m.Groups[1].Value }
-    $m = [System.Text.RegularExpressions.Regex]::Match($RawInput, '"generation_id"\s*:\s*"([^"]*)"')
+    $m = [System.Text.RegularExpressions.Regex]::Match($rawInput, '"generation_id"\s*:\s*"([^"]*)"')
     if ($m.Success) { $head.GenerationId = $m.Groups[1].Value }
-    $m = [System.Text.RegularExpressions.Regex]::Match($RawInput, '"model"\s*:\s*"([^"]*)"')
+    $m = [System.Text.RegularExpressions.Regex]::Match($rawInput, '"model"\s*:\s*"([^"]*)"')
     if ($m.Success) { $head.ModelName = $m.Groups[1].Value }
-    $m = [System.Text.RegularExpressions.Regex]::Match($RawInput, '"hook_event_name"\s*:\s*"([^"]*)"')
+    $m = [System.Text.RegularExpressions.Regex]::Match($rawInput, '"hook_event_name"\s*:\s*"([^"]*)"')
     if ($m.Success) { $head.HookEventName = $m.Groups[1].Value }
-    $m = [System.Text.RegularExpressions.Regex]::Match($RawInput, '"workspace_roots"\s*:\s*\[\s*"([^"]*)"')
+    $m = [System.Text.RegularExpressions.Regex]::Match($rawInput, '"workspace_roots"\s*:\s*\[\s*"([^"]*)"')
     if ($m.Success) {
       $firstRoot = $m.Groups[1].Value
       if (-not [string]::IsNullOrWhiteSpace($firstRoot)) {
