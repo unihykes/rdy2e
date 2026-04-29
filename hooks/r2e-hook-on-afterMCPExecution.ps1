@@ -4,11 +4,10 @@ param()
 
 # Hook: afterMCPExecution
 Set-HookOutputUtf8
-$rawInput = Read-HookRawInput
-$context, $payload = Get-HookStdinPayload -RawInput $rawInput
+$head, $body = Read-HookInputHeadAndBody
 $projectDir = Get-HookProjectDir
-$linePrefix = Format-HookStdinContextLinePrefix -Context $context
-$payload = Invoke-HookStdinPayloadEdit -Context $context -Payload $payload
-Add-HookEventsFileLine -ProjectDir $projectDir -LinePrefix $linePrefix -Payload $payload -IsValidJson $context.IsValidJson
+$linePrefix = Format-HookInputHeadLinePrefix -Head $head
+$body = Invoke-HookInputBodyEdit -Head $head -Body $body
+Add-HookEventsFileLine -ProjectDir $projectDir -LinePrefix $linePrefix -Body $body -IsValidJson $head.IsValidJson
 Write-HookAllowResponse
 exit 0

@@ -17,15 +17,15 @@ param()
 
 . (Join-Path $PSScriptRoot "r2e-hook-common.ps1")
 
-function Edit-HookStdinPayload {
-  # 对 stdin 解析后的 JSON 字符串做二次处理
+function Edit-HookInputBody {
+  # 对 stdin 解析后的 Body（JSON 字符串）做二次处理
   param(
     [Parameter(Mandatory = $true)]
     [AllowEmptyString()]
-    [string]$Payload
+    [string]$Body
   )
   try {
-    $obj = $Payload | ConvertFrom-Json
+    $obj = $Body | ConvertFrom-Json
     if ($obj.PSObject.Properties["session_id"] -and $obj.session_id -is [string]) {
       $sid = [string]$obj.session_id
       if (-not [string]::IsNullOrWhiteSpace($sid)) {
@@ -34,7 +34,7 @@ function Edit-HookStdinPayload {
     }
     return ($obj | ConvertTo-Json -Compress -Depth 20)
   } catch {
-    return $Payload
+    return $Body
   }
 }
 
@@ -62,12 +62,11 @@ function Write-HookAllowResponse {
 }
 
 Set-HookOutputUtf8
-$rawInput = Read-HookRawInput
-$context, $payload = Get-HookStdinPayload -RawInput $rawInput
+$head, $body = Read-HookInputHeadAndBody
 $projectDir = Get-HookProjectDir
-$linePrefix = Format-HookStdinContextLinePrefix -Context $context
-$payload = Invoke-HookStdinPayloadEdit -Context $context -Payload $payload
-Add-HookEventsFileLine -ProjectDir $projectDir -LinePrefix $linePrefix -Payload $payload -IsValidJson $context.IsValidJson
+$linePrefix = Format-HookInputHeadLinePrefix -Head $head
+$body = Invoke-HookInputBodyEdit -Head $head -Body $body
+Add-HookEventsFileLine -ProjectDir $projectDir -LinePrefix $linePrefix -Body $body -IsValidJson $head.IsValidJson
 
 #usage: Write-HookAllowResponse -Env @{a=1} -AdditionalContext "session_start"
 Write-HookAllowResponse

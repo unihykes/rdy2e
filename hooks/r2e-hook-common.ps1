@@ -1,5 +1,5 @@
-# 从 stdin JSON 解析出的会话与事件元信息（供上层 hook 任意使用，不限于写文件）
-class R2eHookStdinContext {
+# 对应 Cursor hook 官方文档中的基础字段（conversation_id、model 等）解析结果；事件正文为 JSON 字符串（各 hook 特有字段等）。
+class R2eHookInputHead {
   [string]$ConversationId = "-"
   [string]$GenerationId = "-"
   [string]$ModelName = "-"
@@ -13,44 +13,47 @@ function Set-HookOutputUtf8 {
   [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 }
 
-function Read-HookRawInput {
-  # 从 stdin 读取 hook 的原始 JSON 入参，并去掉可能存在的 UTF-8 BOM
+function Read-HookInputHeadAndBody {
+  <#
+    从 stdin 读取 hook 原始 JSON（去掉可能存在的 UTF-8 BOM），解析为 R2eHookInputHead 与脱敏后的 Body（JSON 字符串）。
+    各 on-*.ps1 可一行完成读入与解析。
+  #>
   $stdin = [Console]::OpenStandardInput()
   $reader = New-Object System.IO.StreamReader($stdin, [System.Text.UTF8Encoding]::new($false), $true)
   $rawInput = $reader.ReadToEnd()
   $rawInput = $rawInput.TrimStart([char]0xFEFF)
   $reader.Dispose()
-  return $rawInput
+  return Get-HookInputHeadAndBody -RawInput $rawInput
 }
 
-function Get-HookStdinPayload {
+function Get-HookInputHeadAndBody {
   <#
-    从 hook stdin 原始字符串解析出两个值：Context（R2eHookStdinContext）与 Payload（脱敏/裁剪后的 JSON 或原文）。
+    从 hook stdin 原始字符串解析出两个值：Head（R2eHookInputHead，官方基础字段）与 Body（脱敏/裁剪后的 JSON 或原文，事件特有部分）。
   #>
   param(
     [Parameter(Mandatory = $true)]
     [string]$RawInput
   )
 
-  $ctx = [R2eHookStdinContext]::new()
-  $payloadStr = $RawInput
+  $head = [R2eHookInputHead]::new()
+  $bodyStr = $RawInput
 
   try {
     $obj = $RawInput | ConvertFrom-Json
     if ($obj.PSObject.Properties["conversation_id"] -and $obj.conversation_id -is [string]) {
-      $ctx.ConversationId = $obj.conversation_id
+      $head.ConversationId = $obj.conversation_id
       $obj.PSObject.Properties.Remove("conversation_id")
     }
     if ($obj.PSObject.Properties["generation_id"] -and $obj.generation_id -is [string]) {
-      $ctx.GenerationId = $obj.generation_id
+      $head.GenerationId = $obj.generation_id
       $obj.PSObject.Properties.Remove("generation_id")
     }
     if ($obj.PSObject.Properties["model"] -and $obj.model -is [string]) {
-      $ctx.ModelName = $obj.model
+      $head.ModelName = $obj.model
       $obj.PSObject.Properties.Remove("model")
     }
     if ($obj.PSObject.Properties["hook_event_name"] -and $obj.hook_event_name -is [string]) {
-      $ctx.HookEventName = $obj.hook_event_name
+      $head.HookEventName = $obj.hook_event_name
       $obj.PSObject.Properties.Remove("hook_event_name")
     }
     if ($obj.PSObject.Properties["workspace_roots"]) {
@@ -66,7 +69,7 @@ function Get-HookStdinPayload {
         $normalizedRoot = ($firstRoot -replace "\\", "/").TrimEnd("/")
         $leaf = Split-Path -Path $normalizedRoot -Leaf
         if (-not [string]::IsNullOrWhiteSpace($leaf)) {
-          $ctx.WorkspaceName = $leaf
+          $head.WorkspaceName = $leaf
         }
       }
       $obj.PSObject.Properties.Remove("workspace_roots")
@@ -89,18 +92,18 @@ function Get-HookStdinPayload {
     if ($null -ne $obj.content -and $obj.content -is [string]) {
       $obj.content = "..."
     }
-    $payloadStr = $obj | ConvertTo-Json -Compress -Depth 20
+    $bodyStr = $obj | ConvertTo-Json -Compress -Depth 20
   } catch {
-    $ctx.IsValidJson = $false
-    $payloadStr = $RawInput
+    $head.IsValidJson = $false
+    $bodyStr = $RawInput
     $m = [System.Text.RegularExpressions.Regex]::Match($RawInput, '"conversation_id"\s*:\s*"([^"]*)"')
-    if ($m.Success) { $ctx.ConversationId = $m.Groups[1].Value }
+    if ($m.Success) { $head.ConversationId = $m.Groups[1].Value }
     $m = [System.Text.RegularExpressions.Regex]::Match($RawInput, '"generation_id"\s*:\s*"([^"]*)"')
-    if ($m.Success) { $ctx.GenerationId = $m.Groups[1].Value }
+    if ($m.Success) { $head.GenerationId = $m.Groups[1].Value }
     $m = [System.Text.RegularExpressions.Regex]::Match($RawInput, '"model"\s*:\s*"([^"]*)"')
-    if ($m.Success) { $ctx.ModelName = $m.Groups[1].Value }
+    if ($m.Success) { $head.ModelName = $m.Groups[1].Value }
     $m = [System.Text.RegularExpressions.Regex]::Match($RawInput, '"hook_event_name"\s*:\s*"([^"]*)"')
-    if ($m.Success) { $ctx.HookEventName = $m.Groups[1].Value }
+    if ($m.Success) { $head.HookEventName = $m.Groups[1].Value }
     $m = [System.Text.RegularExpressions.Regex]::Match($RawInput, '"workspace_roots"\s*:\s*\[\s*"([^"]*)"')
     if ($m.Success) {
       $firstRoot = $m.Groups[1].Value
@@ -108,16 +111,16 @@ function Get-HookStdinPayload {
         $normalizedRoot = ($firstRoot -replace "\\", "/").TrimEnd("/")
         $leaf = Split-Path -Path $normalizedRoot -Leaf
         if (-not [string]::IsNullOrWhiteSpace($leaf)) {
-          $ctx.WorkspaceName = $leaf
+          $head.WorkspaceName = $leaf
         }
       }
     }
   }
 
-  $payloadStr = [string]$payloadStr
-  $payloadStr = [System.Text.RegularExpressions.Regex]::Replace($payloadStr, "(\r?\n){3,}", "`n`n")
-  $payloadStr = [System.Text.RegularExpressions.Regex]::Replace($payloadStr, "(?:\\r\\n|\\n){3,}", "\n\n")
-  return $ctx, $payloadStr
+  $bodyStr = [string]$bodyStr
+  $bodyStr = [System.Text.RegularExpressions.Regex]::Replace($bodyStr, "(\r?\n){3,}", "`n`n")
+  $bodyStr = [System.Text.RegularExpressions.Regex]::Replace($bodyStr, "(?:\\r\\n|\\n){3,}", "\n\n")
+  return $head, $bodyStr
 }
 
 function Get-HookProjectDir {
@@ -137,59 +140,59 @@ function Get-HookEventsFilePath {
   return (Join-Path $dir "r2e-hook-events.log")
 }
 
-function Format-HookStdinContextLinePrefix {
+function Format-HookInputHeadLinePrefix {
   <#
-    根据 Get-HookStdinPayload 得到的 Context，生成写入 r2e-hook-events.log 时的行首固定段：
+    根据 Head（R2eHookInputHead）生成写入 r2e-hook-events.log 时的行首固定段：
     [时间戳][工作区][conversationId 短][generationId 短][model][hook_event_name]
   #>
   param(
     [Parameter(Mandatory = $true)]
-    [R2eHookStdinContext]$Context
+    [R2eHookInputHead]$Head
   )
 
   $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
-  $conversationIdShort = [string]$Context.ConversationId
+  $conversationIdShort = [string]$Head.ConversationId
   if (-not [string]::IsNullOrWhiteSpace($conversationIdShort)) {
     $conversationIdShort = ($conversationIdShort -split "-", 2)[0]
   }
-  $generationIdShort = [string]$Context.GenerationId
+  $generationIdShort = [string]$Head.GenerationId
   if (-not [string]::IsNullOrWhiteSpace($generationIdShort)) {
     $generationIdShort = ($generationIdShort -split "-", 2)[0]
   }
-  return "[$timestamp][$($Context.WorkspaceName)][$conversationIdShort][$generationIdShort][$($Context.ModelName)][$($Context.HookEventName)]"
+  return "[$timestamp][$($Head.WorkspaceName)][$conversationIdShort][$generationIdShort][$($Head.ModelName)][$($Head.HookEventName)]"
 }
 
-function Edit-HookStdinPayload {
+function Edit-HookInputBody {
   <#
-    各 hook 可在 dot-source 本文件之后重新定义同名函数，对 Payload（JSON 字符串）做二次处理。
-    默认原样返回；由 Invoke-HookStdinPayloadEdit 在有效 JSON 条件下统一调用。
+    各 hook 可在 dot-source 本文件之后重新定义同名函数，对 Body（JSON 字符串）做二次处理。
+    默认原样返回；由 Invoke-HookInputBodyEdit 在有效 JSON 条件下统一调用。
   #>
   param(
     [Parameter(Mandatory = $true)]
     [AllowEmptyString()]
-    [string]$Payload
+    [string]$Body
   )
-  return $Payload
+  return $Body
 }
 
-function Invoke-HookStdinPayloadEdit {
+function Invoke-HookInputBodyEdit {
   <#
-    统一处理各 hook 对 payload 的二次编辑：
-    - 仅当 Context.IsValidJson 为 true 时调用 Edit-HookStdinPayload
+    统一处理各 hook 对 Body 的二次编辑：
+    - 仅当 Head.IsValidJson 为 true 时调用 Edit-HookInputBody
     - 无效 JSON 时原样返回，避免各 on-*.ps1 重复 if 判定
   #>
   param(
     [Parameter(Mandatory = $true)]
-    [R2eHookStdinContext]$Context,
+    [R2eHookInputHead]$Head,
     [Parameter(Mandatory = $true)]
     [AllowEmptyString()]
-    [string]$Payload
+    [string]$Body
   )
 
-  if ($Context.IsValidJson) {
-    return (Edit-HookStdinPayload -Payload $Payload)
+  if ($Head.IsValidJson) {
+    return (Edit-HookInputBody -Body $Body)
   }
-  return $Payload
+  return $Body
 }
 
 function Add-HookEventsFileLine {
@@ -200,7 +203,7 @@ function Add-HookEventsFileLine {
     [string]$LinePrefix,
     [Parameter(Mandatory = $true)]
     [AllowEmptyString()]
-    [string]$Payload,
+    [string]$Body,
     [Parameter(Mandatory = $true)]
     [bool]$IsValidJson
   )
@@ -210,7 +213,7 @@ function Add-HookEventsFileLine {
   New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
 
   if ($IsValidJson) {
-    Add-Content -Path $filePath -Value "$LinePrefix $Payload" -Encoding utf8
+    Add-Content -Path $filePath -Value "$LinePrefix $Body" -Encoding utf8
   }
   else {
     Add-Content -Path $filePath -Value "$LinePrefix invalid json" -Encoding utf8
