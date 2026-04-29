@@ -7,7 +7,11 @@ Set-HookOutputUtf8
 $rawInput = Read-HookRawInput
 $logData = Get-HookLogData -RawInput $rawInput
 $projectDir = Get-HookProjectDir
-Write-HookLog -LogData $logData -ProjectDir $projectDir
-$null = Normalize-HookRawInputForDebug -RawInput $rawInput
+$head = Get-HookLogHead -LogData $logData
+$body = $logData.LogPayload
+if ($logData.IsValidJson) {
+  $body = Edit-HookLogBody -Body $body
+}
+Add-HookLogLine -ProjectDir $projectDir -Head $head -Body $body -IsValidJson $logData.IsValidJson
 Write-HookAllowResponse
 exit 0

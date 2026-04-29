@@ -145,19 +145,26 @@ function Get-HookProjectDir {
   return $projectDir
 }
 
-function Write-HookLog {
+function Get-HookEventsLogPath {
   param(
-    [Parameter(Mandatory = $true)]
-    [hashtable]$LogData,
     [Parameter(Mandatory = $true)]
     [string]$ProjectDir
   )
-
   $logDir = Join-Path $ProjectDir ".cursor/log"
-  # 确保日志目录存在
-  New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+  return (Join-Path $logDir "r2e-hook-events.log")
+}
 
-  $logPath = Join-Path $logDir "r2e-hooks.log"
+function Get-HookLogHead {
+  <#
+    由 Get-HookLogData 得到的 LogData 生成日志行 head（与各事件统一的 [时间戳][…]… 格式）：
+    [时间戳][工作区][conversationId 短][generationId 短][model][hook_event_name]
+    与 body（JSON 字符串）拼成完整一行。
+  #>
+  param(
+    [Parameter(Mandatory = $true)]
+    [hashtable]$LogData
+  )
+
   $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
   $conversationIdShort = [string]$LogData.ConversationId
   if (-not [string]::IsNullOrWhiteSpace($conversationIdShort)) {
@@ -167,27 +174,45 @@ function Write-HookLog {
   if (-not [string]::IsNullOrWhiteSpace($generationIdShort)) {
     $generationIdShort = ($generationIdShort -split "-", 2)[0]
   }
-  # 日志前缀固定结构，便于后续按字段检索/过滤
-  $prefix = "[$timestamp][$($LogData.WorkspaceName)][$conversationIdShort][$generationIdShort][$($LogData.ModelName)][$($LogData.HookEventName)]"
-
-  if ($LogData.IsValidJson) {
-    Add-Content -Path $logPath -Value "$prefix $($LogData.LogPayload)" -Encoding utf8
-  } else {
-    Add-Content -Path $logPath -Value "$prefix invalid json" -Encoding utf8
-  }
+  return "[$timestamp][$($LogData.WorkspaceName)][$conversationIdShort][$generationIdShort][$($LogData.ModelName)][$($LogData.HookEventName)]"
 }
 
-function Normalize-HookRawInputForDebug {
+function Edit-HookLogBody {
+  <#
+    各 hook 脚本可在 dot-source 本文件之后重新定义同名函数，对 body（JSON 字符串）做二次剪裁。
+    默认原样返回；仅当 LogData.IsValidJson 为 true 时才会调用。
+  #>
   param(
     [Parameter(Mandatory = $true)]
     [AllowEmptyString()]
-    [string]$RawInput
+    [string]$Body
+  )
+  return $Body
+}
+
+function Add-HookLogLine {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$ProjectDir,
+    [Parameter(Mandatory = $true)]
+    [string]$Head,
+    [Parameter(Mandatory = $true)]
+    [AllowEmptyString()]
+    [string]$Body,
+    [Parameter(Mandatory = $true)]
+    [bool]$IsValidJson
   )
 
-  if ([string]::IsNullOrWhiteSpace($RawInput)) {
-    return "(empty)"
+  $logPath = Get-HookEventsLogPath -ProjectDir $ProjectDir
+  $logDir = Split-Path -Path $logPath -Parent
+  New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+
+  if ($IsValidJson) {
+    Add-Content -Path $logPath -Value "$Head $Body" -Encoding utf8
   }
-  return $RawInput
+  else {
+    Add-Content -Path $logPath -Value "$Head invalid json" -Encoding utf8
+  }
 }
 
 function Write-HookAllowResponse {
