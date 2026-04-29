@@ -162,13 +162,33 @@ function Format-HookStdinContextLinePrefix {
 function Edit-HookStdinPayload {
   <#
     各 hook 可在 dot-source 本文件之后重新定义同名函数，对 Payload（JSON 字符串）做二次处理。
-    默认原样返回；仅当 Context.IsValidJson 为 true 时由各 on-*.ps1 调用。
+    默认原样返回；由 Invoke-HookStdinPayloadEdit 在有效 JSON 条件下统一调用。
   #>
   param(
     [Parameter(Mandatory = $true)]
     [AllowEmptyString()]
     [string]$Payload
   )
+  return $Payload
+}
+
+function Invoke-HookStdinPayloadEdit {
+  <#
+    统一处理各 hook 对 payload 的二次编辑：
+    - 仅当 Context.IsValidJson 为 true 时调用 Edit-HookStdinPayload
+    - 无效 JSON 时原样返回，避免各 on-*.ps1 重复 if 判定
+  #>
+  param(
+    [Parameter(Mandatory = $true)]
+    [R2eHookStdinContext]$Context,
+    [Parameter(Mandatory = $true)]
+    [AllowEmptyString()]
+    [string]$Payload
+  )
+
+  if ($Context.IsValidJson) {
+    return (Edit-HookStdinPayload -Payload $Payload)
+  }
   return $Payload
 }
 

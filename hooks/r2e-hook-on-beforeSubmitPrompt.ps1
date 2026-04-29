@@ -8,9 +8,7 @@ $rawInput = Read-HookRawInput
 $context, $payload = Get-HookStdinPayload -RawInput $rawInput
 $projectDir = Get-HookProjectDir
 $linePrefix = Format-HookStdinContextLinePrefix -Context $context
-if ($context.IsValidJson) {
-  $payload = Edit-HookStdinPayload -Payload $payload
-}
+$payload = Invoke-HookStdinPayloadEdit -Context $context -Payload $payload
 Add-HookEventsFileLine -ProjectDir $projectDir -LinePrefix $linePrefix -Payload $payload -IsValidJson $context.IsValidJson
 Write-HookAllowResponse
 exit 0
