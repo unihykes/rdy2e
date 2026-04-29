@@ -5,13 +5,13 @@ param()
 # Hook: afterAgentThought
 Set-HookOutputUtf8
 $rawInput = Read-HookRawInput
-$logEntry = Get-HookStdinLogEntryParts -RawInput $rawInput
+$stdinPayload = Get-HookStdinPayload -RawInput $rawInput
 $projectDir = Get-HookProjectDir
-$head = Get-HookLogHead -Entry $logEntry
-$body = $logEntry.Body
-if ($logEntry.HeadFields.IsValidJson) {
-  $body = Edit-HookLogBody -Body $body
+$linePrefix = Format-HookStdinContextLinePrefix -InputPayload $stdinPayload
+$payload = $stdinPayload.Payload
+if ($stdinPayload.Context.IsValidJson) {
+  $payload = Edit-HookStdinPayload -Payload $payload
 }
-Add-HookLogLine -ProjectDir $projectDir -Head $head -Body $body -IsValidJson $logEntry.HeadFields.IsValidJson
+Add-HookEventsFileLine -ProjectDir $projectDir -LinePrefix $linePrefix -Payload $payload -IsValidJson $stdinPayload.Context.IsValidJson
 Write-HookAllowResponse
 exit 0
