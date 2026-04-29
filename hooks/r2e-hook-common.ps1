@@ -8,12 +8,6 @@ class R2eHookStdinContext {
   [bool]$IsValidJson = $true
 }
 
-# 解析后的 stdin：结构化上下文 + 脱敏/裁剪后的 JSON 字符串（供上层任意使用）
-class R2eHookStdinPayload {
-  [string]$Payload = ""
-  [R2eHookStdinContext]$Context = [R2eHookStdinContext]::new()
-}
-
 function Set-HookOutputUtf8 {
   # 统一 stdout 编码，避免中文输出乱码
   [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
@@ -31,15 +25,14 @@ function Read-HookRawInput {
 
 function Get-HookStdinPayload {
   <#
-    从 hook stdin 原始字符串解析出 R2eHookStdinPayload：填充 Context 各字段与 Payload（脱敏/裁剪后的 JSON 或原文）。
+    从 hook stdin 原始字符串解析出两个值：Context（R2eHookStdinContext）与 Payload（脱敏/裁剪后的 JSON 或原文）。
   #>
   param(
     [Parameter(Mandatory = $true)]
     [string]$RawInput
   )
 
-  $result = [R2eHookStdinPayload]::new()
-  $ctx = $result.Context
+  $ctx = [R2eHookStdinContext]::new()
   $payloadStr = $RawInput
 
   try {
@@ -124,8 +117,7 @@ function Get-HookStdinPayload {
   $payloadStr = [string]$payloadStr
   $payloadStr = [System.Text.RegularExpressions.Regex]::Replace($payloadStr, "(\r?\n){3,}", "`n`n")
   $payloadStr = [System.Text.RegularExpressions.Regex]::Replace($payloadStr, "(?:\\r\\n|\\n){3,}", "\n\n")
-  $result.Payload = $payloadStr
-  return $result
+  return $ctx, $payloadStr
 }
 
 function Get-HookProjectDir {
@@ -147,31 +139,30 @@ function Get-HookEventsFilePath {
 
 function Format-HookStdinContextLinePrefix {
   <#
-    根据 Get-HookStdinPayload 得到的 InputPayload，生成写入 r2e-hook-events.log 时的行首固定段：
+    根据 Get-HookStdinPayload 得到的 Context，生成写入 r2e-hook-events.log 时的行首固定段：
     [时间戳][工作区][conversationId 短][generationId 短][model][hook_event_name]
   #>
   param(
     [Parameter(Mandatory = $true)]
-    [R2eHookStdinPayload]$InputPayload
+    [R2eHookStdinContext]$Context
   )
 
-  $ctx = $InputPayload.Context
   $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
-  $conversationIdShort = [string]$ctx.ConversationId
+  $conversationIdShort = [string]$Context.ConversationId
   if (-not [string]::IsNullOrWhiteSpace($conversationIdShort)) {
     $conversationIdShort = ($conversationIdShort -split "-", 2)[0]
   }
-  $generationIdShort = [string]$ctx.GenerationId
+  $generationIdShort = [string]$Context.GenerationId
   if (-not [string]::IsNullOrWhiteSpace($generationIdShort)) {
     $generationIdShort = ($generationIdShort -split "-", 2)[0]
   }
-  return "[$timestamp][$($ctx.WorkspaceName)][$conversationIdShort][$generationIdShort][$($ctx.ModelName)][$($ctx.HookEventName)]"
+  return "[$timestamp][$($Context.WorkspaceName)][$conversationIdShort][$generationIdShort][$($Context.ModelName)][$($Context.HookEventName)]"
 }
 
 function Edit-HookStdinPayload {
   <#
     各 hook 可在 dot-source 本文件之后重新定义同名函数，对 Payload（JSON 字符串）做二次处理。
-    默认原样返回；仅当 InputPayload.Context.IsValidJson 为 true 时由各 on-*.ps1 调用。
+    默认原样返回；仅当 Context.IsValidJson 为 true 时由各 on-*.ps1 调用。
   #>
   param(
     [Parameter(Mandatory = $true)]
