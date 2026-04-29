@@ -1,3 +1,19 @@
+# 日志行 head 中除时间戳外的各字段（由 stdin JSON 解析或正则回退得到）
+class R2eHookLogHeadInfo {
+  [string]$ConversationId = "-"
+  [string]$GenerationId = "-"
+  [string]$ModelName = "-"
+  [string]$HookEventName = "-"
+  [string]$WorkspaceName = "-"
+  [bool]$IsValidJson = $true
+}
+
+# 一条 hook 日志的 head 元数据与 body（JSON 字符串）；body 在函数内填充
+class R2eHookLogEntryParts {
+  [string]$Body = ""
+  [R2eHookLogHeadInfo]$HeadFields = [R2eHookLogHeadInfo]::new()
+}
+
 function Set-HookOutputUtf8 {
   # 统一 stdout 编码，避免中文日志乱码
   [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
@@ -13,40 +29,39 @@ function Read-HookRawInput {
   return $rawInput
 }
 
-function Get-HookLogData {
+function Get-HookStdinLogEntryParts {
+  <#
+    从 hook stdin 原始字符串解析出日志 head 各字段与 body（脱敏/裁剪后的 JSON 或原文）。
+  #>
   param(
     [Parameter(Mandatory = $true)]
     [string]$RawInput
   )
 
-  $logPayload = $RawInput
-  $conversationId = "-"
-  $generationId = "-"
-  $modelName = "-"
-  $hookEventName = "-"
-  $workspaceName = "-"
-  $isValidJson = $true
+  $entry = [R2eHookLogEntryParts]::new()
+  $h = $entry.HeadFields
+  $body = $RawInput
 
   try {
     # 优先按 JSON 解析：提取关键信息并清洗敏感/冗余字段
     $obj = $RawInput | ConvertFrom-Json
     if ($obj.PSObject.Properties["conversation_id"] -and $obj.conversation_id -is [string]) {
-      $conversationId = $obj.conversation_id
+      $h.ConversationId = $obj.conversation_id
       # 移除：已进入日志前缀，无需在 JSON payload 中重复
       $obj.PSObject.Properties.Remove("conversation_id")
     }
     if ($obj.PSObject.Properties["generation_id"] -and $obj.generation_id -is [string]) {
-      $generationId = $obj.generation_id
+      $h.GenerationId = $obj.generation_id
       # 移除：已进入日志前缀，无需在 JSON payload 中重复
       $obj.PSObject.Properties.Remove("generation_id")
     }
     if ($obj.PSObject.Properties["model"] -and $obj.model -is [string]) {
-      $modelName = $obj.model
+      $h.ModelName = $obj.model
       # 移除：已进入日志前缀，无需在 JSON payload 中重复
       $obj.PSObject.Properties.Remove("model")
     }
     if ($obj.PSObject.Properties["hook_event_name"] -and $obj.hook_event_name -is [string]) {
-      $hookEventName = $obj.hook_event_name
+      $h.HookEventName = $obj.hook_event_name
       # 移除：已进入日志前缀，无需在 JSON payload 中重复
       $obj.PSObject.Properties.Remove("hook_event_name")
     }
@@ -63,7 +78,7 @@ function Get-HookLogData {
         $normalizedRoot = ($firstRoot -replace "\\", "/").TrimEnd("/")
         $leaf = Split-Path -Path $normalizedRoot -Leaf
         if (-not [string]::IsNullOrWhiteSpace($leaf)) {
-          $workspaceName = $leaf
+          $h.WorkspaceName = $leaf
         }
       }
       # 移除：仅用于提取工作区名，完整路径不写入日志以减少噪声
@@ -94,19 +109,19 @@ function Get-HookLogData {
       $obj.content = "..."
     }
     # 重新序列化，确保结构合法（不会出现手工拼接导致的尾逗号）
-    $logPayload = $obj | ConvertTo-Json -Compress -Depth 20
+    $body = $obj | ConvertTo-Json -Compress -Depth 20
   } catch {
     # 非 JSON 输入时降级处理：保留原文，并尽量用正则提取关键字段
-    $isValidJson = $false
-    $logPayload = $RawInput
+    $h.IsValidJson = $false
+    $body = $RawInput
     $m = [System.Text.RegularExpressions.Regex]::Match($RawInput, '"conversation_id"\s*:\s*"([^"]*)"')
-    if ($m.Success) { $conversationId = $m.Groups[1].Value }
+    if ($m.Success) { $h.ConversationId = $m.Groups[1].Value }
     $m = [System.Text.RegularExpressions.Regex]::Match($RawInput, '"generation_id"\s*:\s*"([^"]*)"')
-    if ($m.Success) { $generationId = $m.Groups[1].Value }
+    if ($m.Success) { $h.GenerationId = $m.Groups[1].Value }
     $m = [System.Text.RegularExpressions.Regex]::Match($RawInput, '"model"\s*:\s*"([^"]*)"')
-    if ($m.Success) { $modelName = $m.Groups[1].Value }
+    if ($m.Success) { $h.ModelName = $m.Groups[1].Value }
     $m = [System.Text.RegularExpressions.Regex]::Match($RawInput, '"hook_event_name"\s*:\s*"([^"]*)"')
-    if ($m.Success) { $hookEventName = $m.Groups[1].Value }
+    if ($m.Success) { $h.HookEventName = $m.Groups[1].Value }
     $m = [System.Text.RegularExpressions.Regex]::Match($RawInput, '"workspace_roots"\s*:\s*\[\s*"([^"]*)"')
     if ($m.Success) {
       $firstRoot = $m.Groups[1].Value
@@ -114,26 +129,18 @@ function Get-HookLogData {
         $normalizedRoot = ($firstRoot -replace "\\", "/").TrimEnd("/")
         $leaf = Split-Path -Path $normalizedRoot -Leaf
         if (-not [string]::IsNullOrWhiteSpace($leaf)) {
-          $workspaceName = $leaf
+          $h.WorkspaceName = $leaf
         }
       }
     }
   }
 
-  $logPayload = [string]$logPayload
+  $body = [string]$body
   # 压缩过多空行，避免日志被无意义换行撑大
-  $logPayload = [System.Text.RegularExpressions.Regex]::Replace($logPayload, "(\r?\n){3,}", "`n`n")
-  $logPayload = [System.Text.RegularExpressions.Regex]::Replace($logPayload, "(?:\\r\\n|\\n){3,}", "\n\n")
-
-  return @{
-    LogPayload = $logPayload
-    ConversationId = $conversationId
-    GenerationId = $generationId
-    ModelName = $modelName
-    HookEventName = $hookEventName
-    WorkspaceName = $workspaceName
-    IsValidJson = $isValidJson
-  }
+  $body = [System.Text.RegularExpressions.Regex]::Replace($body, "(\r?\n){3,}", "`n`n")
+  $body = [System.Text.RegularExpressions.Regex]::Replace($body, "(?:\\r\\n|\\n){3,}", "\n\n")
+  $entry.Body = $body
+  return $entry
 }
 
 function Get-HookProjectDir {
@@ -156,31 +163,32 @@ function Get-HookEventsLogPath {
 
 function Get-HookLogHead {
   <#
-    由 Get-HookLogData 得到的 LogData 生成日志行 head（与各事件统一的 [时间戳][…]… 格式）：
+    由 Get-HookStdinLogEntryParts 得到的 Entry 生成日志行 head（与各事件统一的 [时间戳][…]… 格式）：
     [时间戳][工作区][conversationId 短][generationId 短][model][hook_event_name]
     与 body（JSON 字符串）拼成完整一行。
   #>
   param(
     [Parameter(Mandatory = $true)]
-    [hashtable]$LogData
+    [R2eHookLogEntryParts]$Entry
   )
 
+  $hf = $Entry.HeadFields
   $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
-  $conversationIdShort = [string]$LogData.ConversationId
+  $conversationIdShort = [string]$hf.ConversationId
   if (-not [string]::IsNullOrWhiteSpace($conversationIdShort)) {
     $conversationIdShort = ($conversationIdShort -split "-", 2)[0]
   }
-  $generationIdShort = [string]$LogData.GenerationId
+  $generationIdShort = [string]$hf.GenerationId
   if (-not [string]::IsNullOrWhiteSpace($generationIdShort)) {
     $generationIdShort = ($generationIdShort -split "-", 2)[0]
   }
-  return "[$timestamp][$($LogData.WorkspaceName)][$conversationIdShort][$generationIdShort][$($LogData.ModelName)][$($LogData.HookEventName)]"
+  return "[$timestamp][$($hf.WorkspaceName)][$conversationIdShort][$generationIdShort][$($hf.ModelName)][$($hf.HookEventName)]"
 }
 
 function Edit-HookLogBody {
   <#
     各 hook 脚本可在 dot-source 本文件之后重新定义同名函数，对 body（JSON 字符串）做二次剪裁。
-    默认原样返回；仅当 LogData.IsValidJson 为 true 时才会调用。
+    默认原样返回；仅当 Entry.HeadFields.IsValidJson 为 true 时才会调用。
   #>
   param(
     [Parameter(Mandatory = $true)]

@@ -5,13 +5,13 @@ param()
 # Hook: afterMCPExecution
 Set-HookOutputUtf8
 $rawInput = Read-HookRawInput
-$logData = Get-HookLogData -RawInput $rawInput
+$logEntry = Get-HookStdinLogEntryParts -RawInput $rawInput
 $projectDir = Get-HookProjectDir
-$head = Get-HookLogHead -LogData $logData
-$body = $logData.LogPayload
-if ($logData.IsValidJson) {
+$head = Get-HookLogHead -Entry $logEntry
+$body = $logEntry.Body
+if ($logEntry.HeadFields.IsValidJson) {
   $body = Edit-HookLogBody -Body $body
 }
-Add-HookLogLine -ProjectDir $projectDir -Head $head -Body $body -IsValidJson $logData.IsValidJson
+Add-HookLogLine -ProjectDir $projectDir -Head $head -Body $body -IsValidJson $logEntry.HeadFields.IsValidJson
 Write-HookAllowResponse
 exit 0
