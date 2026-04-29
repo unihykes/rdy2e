@@ -1,8 +1,10 @@
 function Set-HookOutputUtf8 {
+  # 统一 stdout 编码，避免中文日志乱码
   [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 }
 
 function Read-HookRawInput {
+  # 从 stdin 读取 hook 的原始 JSON 入参，并去掉可能存在的 UTF-8 BOM
   $stdin = [Console]::OpenStandardInput()
   $reader = New-Object System.IO.StreamReader($stdin, [System.Text.UTF8Encoding]::new($false), $true)
   $rawInput = $reader.ReadToEnd()
@@ -26,21 +28,26 @@ function Get-HookLogData {
   $isValidJson = $true
 
   try {
+    # 优先按 JSON 解析：提取关键信息并清洗敏感/冗余字段
     $obj = $RawInput | ConvertFrom-Json
     if ($obj.PSObject.Properties["conversation_id"] -and $obj.conversation_id -is [string]) {
       $conversationId = $obj.conversation_id
+      # 移除：已进入日志前缀，无需在 JSON payload 中重复
       $obj.PSObject.Properties.Remove("conversation_id")
     }
     if ($obj.PSObject.Properties["generation_id"] -and $obj.generation_id -is [string]) {
       $generationId = $obj.generation_id
+      # 移除：已进入日志前缀，无需在 JSON payload 中重复
       $obj.PSObject.Properties.Remove("generation_id")
     }
     if ($obj.PSObject.Properties["model"] -and $obj.model -is [string]) {
       $modelName = $obj.model
+      # 移除：已进入日志前缀，无需在 JSON payload 中重复
       $obj.PSObject.Properties.Remove("model")
     }
     if ($obj.PSObject.Properties["hook_event_name"] -and $obj.hook_event_name -is [string]) {
       $hookEventName = $obj.hook_event_name
+      # 移除：已进入日志前缀，无需在 JSON payload 中重复
       $obj.PSObject.Properties.Remove("hook_event_name")
     }
     if ($obj.PSObject.Properties["workspace_roots"]) {
@@ -59,25 +66,37 @@ function Get-HookLogData {
           $workspaceName = $leaf
         }
       }
+      # 移除：仅用于提取工作区名，完整路径不写入日志以减少噪声
       $obj.PSObject.Properties.Remove("workspace_roots")
     }
     if ($obj.PSObject.Properties["cursor_version"]) {
+      # 移除：版本信息对本地 hook 排查价值较低，避免日志冗余
       $obj.PSObject.Properties.Remove("cursor_version")
     }
     if ($obj.PSObject.Properties["user_email"]) {
+      # 移除：用户隐私字段，不写入日志
       $obj.PSObject.Properties.Remove("user_email")
     }
+    if ($obj.PSObject.Properties["transcript_path"]) {
+      # 移除：本地绝对路径字段，可能包含敏感目录信息
+      $obj.PSObject.Properties.Remove("transcript_path")
+    }
     if ($null -ne $obj.prompt -and $obj.prompt -is [string]) {
+      # 脱敏：提示词正文可能包含敏感内容，仅保留占位符
       $obj.prompt = "..."
     }
     if ($null -ne $obj.text -and $obj.text -is [string]) {
+      # 脱敏：文本正文可能包含敏感内容，仅保留占位符
       $obj.text = "..."
     }
     if ($null -ne $obj.content -and $obj.content -is [string]) {
+      # 脱敏：内容正文可能包含敏感内容，仅保留占位符
       $obj.content = "..."
     }
+    # 重新序列化，确保结构合法（不会出现手工拼接导致的尾逗号）
     $logPayload = $obj | ConvertTo-Json -Compress -Depth 20
   } catch {
+    # 非 JSON 输入时降级处理：保留原文，并尽量用正则提取关键字段
     $isValidJson = $false
     $logPayload = $RawInput
     $m = [System.Text.RegularExpressions.Regex]::Match($RawInput, '"conversation_id"\s*:\s*"([^"]*)"')
@@ -102,6 +121,7 @@ function Get-HookLogData {
   }
 
   $logPayload = [string]$logPayload
+  # 压缩过多空行，避免日志被无意义换行撑大
   $logPayload = [System.Text.RegularExpressions.Regex]::Replace($logPayload, "(\r?\n){3,}", "`n`n")
   $logPayload = [System.Text.RegularExpressions.Regex]::Replace($logPayload, "(?:\\r\\n|\\n){3,}", "\n\n")
 
@@ -117,6 +137,7 @@ function Get-HookLogData {
 }
 
 function Get-HookProjectDir {
+  # 优先使用 Cursor 注入的项目目录；缺失时退回脚本上级目录
   $projectDir = $env:CURSOR_PROJECT_DIR
   if ([string]::IsNullOrWhiteSpace($projectDir)) {
     $projectDir = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
@@ -133,6 +154,7 @@ function Write-HookLog {
   )
 
   $logDir = Join-Path $ProjectDir ".cursor/log"
+  # 确保日志目录存在
   New-Item -ItemType Directory -Path $logDir -Force | Out-Null
 
   $logPath = Join-Path $logDir "r2e-hooks.log"
@@ -145,6 +167,7 @@ function Write-HookLog {
   if (-not [string]::IsNullOrWhiteSpace($generationIdShort)) {
     $generationIdShort = ($generationIdShort -split "-", 2)[0]
   }
+  # 日志前缀固定结构，便于后续按字段检索/过滤
   $prefix = "[$timestamp][$($LogData.WorkspaceName)][$conversationIdShort][$generationIdShort][$($LogData.ModelName)][$($LogData.HookEventName)]"
 
   if ($LogData.IsValidJson) {
@@ -168,6 +191,7 @@ function Normalize-HookRawInputForDebug {
 }
 
 function Write-HookAllowResponse {
+  # 默认放行，避免 hook 影响主流程执行
   @{
     permission = "allow"
     user_message = "ok"

@@ -95,15 +95,7 @@
         "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\hooks\\r2e-hook-on-afterAgentThought.ps1"
       }
     ],
-    "beforeTabFileRead": [
-      {
-        "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\hooks\\r2e-hook-on-beforeTabFileRead.ps1"
-      }
-    ],
-    "afterTabFileEdit": [
-      {
-        "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\hooks\\r2e-hook-on-afterTabFileEdit.ps1"
-      }
-    ]
+    "beforeTabFileRead": [],
+    "afterTabFileEdit": []
   }
 }
