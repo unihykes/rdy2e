@@ -63,14 +63,13 @@ function Write-HookAllowResponse {
 
 Set-HookOutputUtf8
 $rawInput = Read-HookRawInput
-$stdinPayload = Get-HookStdinPayload -RawInput $rawInput
+$context, $payload = Get-HookStdinPayload -RawInput $rawInput
 $projectDir = Get-HookProjectDir
-$linePrefix = Format-HookStdinContextLinePrefix -InputPayload $stdinPayload
-$payload = $stdinPayload.Payload
-if ($stdinPayload.Context.IsValidJson) {
+$linePrefix = Format-HookStdinContextLinePrefix -Context $context
+if ($context.IsValidJson) {
   $payload = Edit-HookStdinPayload -Payload $payload
 }
-Add-HookEventsFileLine -ProjectDir $projectDir -LinePrefix $linePrefix -Payload $payload -IsValidJson $stdinPayload.Context.IsValidJson
+Add-HookEventsFileLine -ProjectDir $projectDir -LinePrefix $linePrefix -Payload $payload -IsValidJson $context.IsValidJson
 
 #usage: Write-HookAllowResponse -Env @{a=1} -AdditionalContext "session_start"
 Write-HookAllowResponse
