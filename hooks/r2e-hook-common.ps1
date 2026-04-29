@@ -112,20 +112,6 @@ function Get-HookInputHeadAndBody {
   return $head, $bodyStr
 }
 
-function Edit-HookInputBody {
-  <#
-    各 hook 可在 dot-source 本文件之后重新定义同名函数，对 Body（JSON 字符串）做二次处理。
-    默认实现为 no-op，直接返回 Body。
-  #>
-  param(
-    [Parameter(Mandatory = $true)]
-    [AllowEmptyString()]
-    [string]$Body
-  )
-
-  return $Body
-}
-
 function Get-HookProjectDir {
   $projectDir = $env:CURSOR_PROJECT_DIR
   if ([string]::IsNullOrWhiteSpace($projectDir)) {
@@ -172,6 +158,20 @@ function Log-HookEvent {
   else {
     Add-Content -Path $filePath -Value "$LinePrefix invalid json" -Encoding utf8
   }
+}
+
+function Edit-HookInputBody {
+  <#
+    各 hook 可在 dot-source 本文件之后重新定义同名函数，对 Body（JSON 字符串）做二次处理。
+    默认实现为 no-op，直接返回 Body。
+  #>
+  param(
+    [Parameter(Mandatory = $true)]
+    [AllowEmptyString()]
+    [string]$Body
+  )
+
+  return $Body
 }
 
 function Build-HookResponse {
