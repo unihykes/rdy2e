@@ -38,12 +38,12 @@ class R2eHookPostToolUseInputBody {
     $h = @{
       session_id   = $this.session_id
       tool_name    = $this.tool_name
+      tool_use_id  = $this.tool_use_id
       cwd          = $this.cwd
       duration     = $this.duration
       model        = $this.model
       tool_input   = $this.tool_input
       tool_output  = $this.tool_output
-      tool_use_id  = $this.tool_use_id
     }
     if ($null -ne $this.others -and $this.others.Count -gt 0) {
       $h.others = $this.others
