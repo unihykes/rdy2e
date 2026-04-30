@@ -111,7 +111,7 @@ function Get-HookInputBody {
       $obj.PSObject.Properties.Remove("tool_input")
     }
     if ($obj.PSObject.Properties["tool_output"]) {
-      $inst.tool_output = ConvertTo-R2eHookMaskedObjectHashtable -InputObject $obj.tool_output
+      $inst.tool_output = ConvertFrom-R2eHookToolOutputForLog -ToolOutput $obj.tool_output
       $obj.PSObject.Properties.Remove("tool_output")
     }
     foreach ($prop in $obj.PSObject.Properties) {

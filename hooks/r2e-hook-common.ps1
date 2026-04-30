@@ -153,6 +153,47 @@ function ConvertTo-R2eHookMaskedObjectHashtable {
 }
 
 <#
+  postToolUse（等）的 tool_output：可能是 PSCustomObject、JSON 字符串、数组或标量。
+  ConvertTo-R2eHookMaskedObjectHashtable 仅处理对象；字符串/数组原样走入会变为空 {}，日志误判为「始终为空」。
+#>
+function ConvertFrom-R2eHookToolOutputForLog {
+  param([AllowNull()] [object]$ToolOutput)
+
+  if ($null -eq $ToolOutput) {
+    return @{}
+  }
+  if ($ToolOutput -is [System.Management.Automation.PSCustomObject]) {
+    return ConvertTo-R2eHookMaskedObjectHashtable -InputObject $ToolOutput
+  }
+  if ($ToolOutput -is [string]) {
+    $s = [string]$ToolOutput
+    if ([string]::IsNullOrWhiteSpace($s)) {
+      return @{}
+    }
+    try {
+      $nested = $s | ConvertFrom-Json
+      return ConvertFrom-R2eHookToolOutputForLog -ToolOutput $nested
+    } catch {
+      return @{ _unparsed = '...' }
+    }
+  }
+  if ($ToolOutput -is [System.Array]) {
+    $items = [System.Collections.ArrayList]@()
+    foreach ($el in $ToolOutput) {
+      if ($el -is [System.Management.Automation.PSCustomObject]) {
+        [void]$items.Add((ConvertTo-R2eHookMaskedObjectHashtable -InputObject $el))
+      } elseif ($el -is [string]) {
+        [void]$items.Add('...')
+      } else {
+        [void]$items.Add($el)
+      }
+    }
+    return @{ _array = @($items) }
+  }
+  return @{ _value = $ToolOutput }
+}
+
+<#
   ConvertFrom-Json 得到的 tool_input（PSCustomObject）浅拷贝为 Hashtable，便于日志序列化；
   顶层键名为 context 的项统一改写为 "..."（与其它 hook 中对敏感字符串的处理一致）。
   非 PSCustomObject 时返回空 Hashtable（字符串形式的 tool_input 由 ConvertFrom-R2eHookMcpToolInputForLog 先解析再传入）。
