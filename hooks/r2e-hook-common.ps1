@@ -256,8 +256,8 @@ function ConvertTo-R2eHookEventLogJson {
 
 <#
   ConvertFrom-Json 得到的嵌套 JSON 对象（例如 tool_input、tool_output）为 PSCustomObject；
-  拷贝为 Hashtable 便于日志序列化。字符串类型的 content、command 键改为 "..."；
-  嵌套的 PSCustomObject 与对象数组会递归做同样处理。
+  拷贝为 Hashtable 便于日志序列化。字符串类型的 content、command、pattern 键改为 "..."；
+  嵌套的 PSCustomObject 与对象数组会递归做同样处理。（pattern 用于 Grep 等工具，易冗长且像代码片段。）
 #>
 function ConvertTo-R2eHookMaskedObjectHashtable {
   param([AllowNull()] [object]$InputObject)
@@ -276,6 +276,8 @@ function ConvertTo-R2eHookMaskedObjectHashtable {
     } elseif ($p.Name -eq 'content' -and $val -is [string]) {
       $ht[$p.Name] = '...'
     } elseif ($p.Name -eq 'command' -and $val -is [string]) {
+      $ht[$p.Name] = '...'
+    } elseif ($p.Name -eq 'pattern' -and $val -is [string]) {
       $ht[$p.Name] = '...'
     } elseif ($val -is [System.Management.Automation.PSCustomObject]) {
       $ht[$p.Name] = ConvertTo-R2eHookMaskedObjectHashtable -InputObject $val
@@ -370,7 +372,7 @@ function Apply-R2eHookPostToolUseOutputFilePathDedup {
 
 <#
   ConvertFrom-Json 得到的 tool_input（PSCustomObject）浅拷贝为 Hashtable，便于日志序列化；
-  顶层键 context 改为 "..."；字符串类型的 command 改为 "..."（避免日志过长）；
+  顶层键 context 改为 "..."；字符串类型的 command、pattern 改为 "..."；
   嵌套 PSCustomObject 与对象数组递归处理。
   非 PSCustomObject 时返回空 Hashtable（字符串形式的 tool_input 由 ConvertFrom-R2eHookMcpToolInputForLog 先解析再传入）。
 #>
@@ -391,6 +393,8 @@ function ConvertTo-R2eHookMaskedToolInputHashtable {
     } elseif ($p.Name -eq 'context') {
       $ht[$p.Name] = '...'
     } elseif ($p.Name -eq 'command' -and $val -is [string]) {
+      $ht[$p.Name] = '...'
+    } elseif ($p.Name -eq 'pattern' -and $val -is [string]) {
       $ht[$p.Name] = '...'
     } elseif ($val -is [System.Management.Automation.PSCustomObject]) {
       $ht[$p.Name] = ConvertTo-R2eHookMaskedToolInputHashtable -InputObject $val
@@ -414,7 +418,7 @@ function ConvertTo-R2eHookMaskedToolInputHashtable {
 }
 
 <#
-  before/after MCP hook：将 tool_input（对象或 JSON 字符串）转为带 context、command 脱敏的 Hashtable，供日志序列化。
+  before/after MCP hook：将 tool_input（对象或 JSON 字符串）转为带 context、command、pattern 脱敏的 Hashtable，供日志序列化。
 #>
 function ConvertFrom-R2eHookMcpToolInputForLog {
   param([AllowNull()] [object]$ToolInput)
