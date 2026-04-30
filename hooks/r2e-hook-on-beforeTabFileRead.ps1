@@ -2,19 +2,43 @@
 
 . (Join-Path $PSScriptRoot "r2e-hook-common.ps1")
 
+class R2eHookBeforeTabFileReadInputBody {
+  [hashtable]$others
 
-function Edit-HookInputBody {
-  <#
-    各 hook 可在 dot-source 本文件之后重新定义同名函数，对 BodyStr（JSON 字符串）做二次处理。
-    默认实现为 no-op，直接返回 BodyStr。
-  #>
-  param(
-    [Parameter(Mandatory = $true)]
-    [AllowEmptyString()]
-    [string]$BodyStr
-  )
+  [string] ToJsonString() {
+    $h = @{}
+    if ($null -ne $this.others -and $this.others.Count -gt 0) {
+      $h.others = $this.others
+    }
+    return ($h | ConvertTo-Json -Compress -Depth 20)
+  }
+}
 
-  return $BodyStr
+function Get-HookInputBody {
+  $head, $bodyStr = Get-HookInputHeadAndBody
+
+  if ([string]::IsNullOrWhiteSpace($bodyStr)) {
+    return $head, ([R2eHookBeforeTabFileReadInputBody]::new())
+  }
+  try {
+    $obj = $bodyStr | ConvertFrom-Json
+    $inst = [R2eHookBeforeTabFileReadInputBody]::new()
+    foreach ($prop in $obj.PSObject.Properties) {
+      if ($null -eq $inst.others) {
+        $inst.others = @{}
+      }
+      $inst.others[$prop.Name] = $prop.Value
+    }
+    return $head, $inst
+  }
+  catch {
+    $inst = [R2eHookBeforeTabFileReadInputBody]::new()
+    $inst.others = @{
+      _exceptionMessage = [string]$_.Exception.Message
+      _rawBodyStr       = $bodyStr
+    }
+    return $head, $inst
+  }
 }
 
 function Build-HookResponse {
@@ -32,8 +56,7 @@ function Build-HookResponse {
 
 # Hook: beforeTabFileRead
 Set-HookOutputUtf8
-$head, $bodyStr = Get-HookInputHeadAndBody
-$body = Edit-HookInputBody -BodyStr $bodyStr
+$head, $body = Get-HookInputBody
 Add-Content -Encoding utf8 -Path (Get-HookProjectLogPath) -Value (
   "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff')]" +
     "[$($head.WorkspaceName)]" +
@@ -42,7 +65,7 @@ Add-Content -Encoding utf8 -Path (Get-HookProjectLogPath) -Value (
     "[$($head.ModelName)]" +
     "[$($head.HookEventName)]" +
     " " +
-    $(if ($head.IsValidJson) { $body } else { "invalid json" })
+    $(if ($head.IsValidJson) { $body.ToJsonString() } else { "invalid json" })
 )
 $response = Build-HookResponse
 Write-Output $response
