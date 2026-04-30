@@ -535,6 +535,33 @@ function ConvertFrom-R2eHookAttachmentsForLog {
   return @($out)
 }
 
+<#
+  Cursor 偶发截断 stdin，使 "text":"…… 在下一个属性前缺少闭合 "，形如:
+  "text":"xxxx,"otherKey":...
+  合法应为 "text":"xxxx","otherKey":...
+  在首个形如 , "key": 的下一属性前、若逗号前不是 "，则插入一个 "（不假设下一键名为 input_tokens）。
+#>
+function Repair-R2eHookMissingClosingQuoteAfterTextValue {
+  param(
+    [Parameter(Mandatory = $true)]
+    [AllowEmptyString()]
+    [string]$Raw
+  )
+  if ([string]::IsNullOrWhiteSpace($Raw)) { return $null }
+  $openMm = [regex]::Match($Raw, '"text"\s*:\s*"')
+  if (-not $openMm.Success) { return $null }
+  $valueStart = $openMm.Index + $openMm.Length
+  if ($valueStart -ge $Raw.Length) { return $null }
+  $tail = $Raw.Substring($valueStart)
+  $nxMm = [regex]::Match($tail, ',\s*"(?:\\.|[^"\\])*"\s*:')
+  if (-not $nxMm.Success) { return $null }
+  $commaRel = $nxMm.Index
+  if ($commaRel -lt 1) { return $null }
+  if ($tail[$commaRel - 1] -eq [char]'"') { return $null }
+  $absComma = $valueStart + $commaRel
+  return ($Raw.Substring(0, $absComma) + '"' + $Raw.Substring($absComma))
+}
+
 function Get-HookInputHeadAndBody {
   $stdin = [Console]::OpenStandardInput()
   $reader = New-Object System.IO.StreamReader($stdin, [System.Text.UTF8Encoding]::new($false), $true)
@@ -546,7 +573,23 @@ function Get-HookInputHeadAndBody {
   $bodyStr = $rawInput
 
   try {
-    $obj = $rawInput | ConvertFrom-Json
+    $obj = $null
+    try {
+      $obj = $rawInput | ConvertFrom-Json -ErrorAction Stop
+    } catch {
+      $ex = $_
+      $repaired = Repair-R2eHookMissingClosingQuoteAfterTextValue -Raw $rawInput
+      if ($null -ne $repaired) {
+        try {
+          $obj = $repaired | ConvertFrom-Json -ErrorAction Stop
+        } catch {
+          $obj = $null
+        }
+      }
+      if ($null -eq $obj) {
+        throw $ex
+      }
+    }
     if ($obj.PSObject.Properties["conversation_id"] -and $obj.conversation_id -is [string]) {
       $head.ConversationId = $obj.conversation_id
       $obj.PSObject.Properties.Remove("conversation_id")
