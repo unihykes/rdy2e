@@ -38,8 +38,7 @@ function Get-HookInputBody {
   if ([string]::IsNullOrWhiteSpace($bodyStr)) {
     return $head, ([R2eHookSessionStartInputBody]::new())
   }
-
-  # 外层整条 stdin 非合法 JSON：与 common 中 catch 类似，用正则抽出 sessionStart 已知字段；日志一律 ToJsonString
+  
   if (-not $head.IsValidJson) {
     $inst = [R2eHookSessionStartInputBody]::new()
     $m = [System.Text.RegularExpressions.Regex]::Match($bodyStr, '"session_id"\s*:\s*"([^"]*)"')
@@ -54,10 +53,7 @@ function Get-HookInputBody {
     if ($m.Success) {
       $inst.composer_mode = $m.Groups[1].Value
     }
-    $inst.others = @{
-      _invalidOuterJson = $true
-      _rawBodyStr       = $bodyStr
-    }
+    $inst.others = @{ _errorMessage = "invalid json" }
     return $head, $inst
   }
 

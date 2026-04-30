@@ -23,10 +23,7 @@ function Get-HookInputBody {
 
   if (-not $head.IsValidJson) {
     $inst = [R2eHookStopInputBody]::new()
-    $inst.others = @{
-      _invalidOuterJson = $true
-      _rawBodyStr       = $bodyStr
-    }
+    $inst.others = @{ _errorMessage = "invalid json" }
     return $head, $inst
   }
   try {
