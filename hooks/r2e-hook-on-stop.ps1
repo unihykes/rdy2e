@@ -40,7 +40,7 @@ class R2eHookStopInputBody {
     }    if ($null -ne $this.others -and $this.others.Count -gt 0) {
       $h.others = $this.others
     }
-    return ($h | ConvertTo-Json -Compress -Depth 20)
+    return (ConvertTo-R2eHookEventLogJson -InputObject $h)
   }
 }
 

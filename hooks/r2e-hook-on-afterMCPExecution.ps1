@@ -32,7 +32,7 @@ class R2eHookAfterMCPExecutionInputBody {
     if ($null -ne $this.others -and $this.others.Count -gt 0) {
       $h.others = $this.others
     }
-    return ($h | ConvertTo-Json -Compress -Depth 20)
+    return (ConvertTo-R2eHookEventLogJson -InputObject $h)
   }
 }
 
@@ -104,7 +104,7 @@ function Get-HookInputBody {
         if ($v -is [string]) {
           $inst.result_json = $v
         } elseif ($v -is [System.Management.Automation.PSCustomObject]) {
-          $inst.result_json = ($v | ConvertTo-Json -Compress -Depth 20)
+          $inst.result_json = ConvertTo-R2eHookEventLogJson -InputObject $v -Depth 20
         } else {
           $inst.result_json = [string]$v
         }

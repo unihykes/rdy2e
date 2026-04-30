@@ -127,6 +127,133 @@ function Set-HookFallbackWorkspaceNameFromRoots {
   }
 }
 
+$script:R2eHookLogPathPropertyNames = [System.Collections.Generic.HashSet[string]]::new(
+  [StringComparer]::OrdinalIgnoreCase)
+foreach ($n in @(
+    'cwd', 'file_path', 'path', 'root', 'workspace_path', 'workspacePath',
+    'workspace_roots', 'file', 'target', 'target_file', 'directory', 'folder',
+    'uri', 'absolute_path', 'relative_path', 'working_directory', 'workspaceFolder',
+    'rootPath', 'filePath', 'transcript_path', 'agent_transcript_path', 'script_path'
+  )) {
+  [void]$script:R2eHookLogPathPropertyNames.Add($n)
+}
+
+$script:R2eHookLogSkipPathNormalizeNames = [System.Collections.Generic.HashSet[string]]::new(
+  [StringComparer]::OrdinalIgnoreCase)
+foreach ($n in @(
+    'old_string', 'new_string', 'replacement', 'pattern', 'regex',
+    'command', 'output', 'prompt', 'content', 'text', 'user_message',
+    'message', 'result_json', 'thinking', 'response', 'description'
+  )) {
+  [void]$script:R2eHookLogSkipPathNormalizeNames.Add($n)
+}
+
+function Test-R2eHookStringLooksLikeWindowsPath {
+  param([AllowEmptyString()] [string]$s)
+  if ([string]::IsNullOrWhiteSpace($s)) { return $false }
+  if ($s -match '^[A-Za-z]:[\\/]') { return $true }
+  if ($s -match '^\\\\\?\\') { return $true }
+  if ($s -match '^\\\\[^\\]+\\') { return $true }
+  return $false
+}
+
+<#
+  仅用于日志：将 Windows 路径中的反斜杠改为正斜杠，避免 ConvertTo-Json 产生大量 "\\" 转义、难以阅读。
+  通过「属性名属于路径类」或「整串像绝对路径」判定；old_string 等键不处理以免误改编辑片段。
+#>
+function Normalize-R2eHookLogPathsInTree {
+  param(
+    [AllowNull()]
+    $Node,
+
+    [Parameter(Mandatory = $false)]
+    [string]$PropertyName = ""
+  )
+  if ($null -eq $Node) { return $null }
+
+  if ($Node -is [string]) {
+    $s = $Node
+    $skip = ($PropertyName -ne "" -and $script:R2eHookLogSkipPathNormalizeNames.Contains($PropertyName))
+    if ($skip) { return $s }
+    $pathKey = ($PropertyName -ne "" -and $script:R2eHookLogPathPropertyNames.Contains($PropertyName))
+    $looksPath = (Test-R2eHookStringLooksLikeWindowsPath $s)
+    if (($pathKey -or $looksPath) -and ($s.IndexOf([char]'\') -ge 0)) {
+      return ($s -replace '\\', '/')
+    }
+    return $s
+  }
+
+  if ($Node -is [bool] -or $Node -is [int] -or $Node -is [long] -or $Node -is [double] -or $Node -is [decimal]) {
+    return $Node
+  }
+
+  if ($Node -is [hashtable] -or $Node -is [System.Collections.IDictionary]) {
+    foreach ($k in @($Node.Keys)) {
+      $ks = [string]$k
+      $Node[$k] = Normalize-R2eHookLogPathsInTree -Node $Node[$k] -PropertyName $ks
+    }
+    return $Node
+  }
+
+  if ($Node -is [System.Management.Automation.PSCustomObject]) {
+    foreach ($p in @($Node.PSObject.Properties)) {
+      $newV = Normalize-R2eHookLogPathsInTree -Node $p.Value -PropertyName $p.Name
+      $Node | Add-Member -NotePropertyName $p.Name -NotePropertyValue $newV -Force
+    }
+    return $Node
+  }
+
+  if ($Node -is [System.Collections.IEnumerable] -and $Node -isnot [string]) {
+    $list = [System.Collections.ArrayList]::new()
+    foreach ($el in $Node) {
+      [void]$list.Add((Normalize-R2eHookLogPathsInTree -Node $el -PropertyName $PropertyName))
+    }
+    return @($list)
+  }
+
+  return $Node
+}
+
+<#
+  写入 r2e-hook-events.log 前统一 JSON 序列化：先深度 round-trip 再规范化路径斜杠，避免改到内存中的原始对象。
+#>
+function ConvertTo-R2eHookEventLogJson {
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true, Position = 0)]
+    $InputObject,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(1, 2147483647)]
+    [int]$Depth = 20
+  )
+
+  if ($null -eq $InputObject) {
+    return 'null'
+  }
+
+  $roundTripDepth = [Math]::Max(100, $Depth)
+  $json = $null
+  try {
+    $json = $InputObject | ConvertTo-Json -Compress -Depth $roundTripDepth -ErrorAction Stop
+  } catch {
+    return ($InputObject | ConvertTo-Json -Compress -Depth $Depth)
+  }
+
+  if ([string]::IsNullOrWhiteSpace($json)) {
+    return ($InputObject | ConvertTo-Json -Compress -Depth $Depth)
+  }
+
+  try {
+    $tree = $json | ConvertFrom-Json -ErrorAction Stop
+  } catch {
+    return $json
+  }
+
+  $null = Normalize-R2eHookLogPathsInTree -Node $tree
+  return ($tree | ConvertTo-Json -Compress -Depth $Depth)
+}
+
 <#
   ConvertFrom-Json 得到的嵌套 JSON 对象（例如 tool_input、tool_output）为 PSCustomObject；
   浅拷贝为 Hashtable 便于日志序列化；顶层字符串类型的 content 键改写为 "..."。

@@ -27,7 +27,7 @@ class R2eHookSessionStartInputBody {
     if ($null -ne $this.others -and $this.others.Count -gt 0) {
       $h.others = $this.others
     }
-    return ($h | ConvertTo-Json -Compress -Depth 20)
+    return (ConvertTo-R2eHookEventLogJson -InputObject $h)
   }
 }
 
@@ -89,7 +89,7 @@ function Build-HookResponse {
     [R2eHookSessionStartInputBody]$Body
   )
   $out = @{}
-  return ($out | ConvertTo-Json -Compress -Depth 20)
+  return (ConvertTo-R2eHookEventLogJson -InputObject $out)
 }
 
 # 脚本入口
