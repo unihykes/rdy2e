@@ -179,14 +179,19 @@ function Get-HookInputBody {
   }
 }
 
+<#
+// Output
+{
+  "followup_message": "<message text>"
+}
+#>
 function Build-HookResponse {
   <#
     生成传给 Cursor hook 的应答 JSON 字符串（不写 stdout）；调用方对返回值自行 Write-Output。
-    默认：permission 放行。
+    仅返回注释约定的输出字段。
   #>
   $payload = @{
-    permission = "allow"
-    user_message = "ok"
+    followup_message = ""
   }
   return ($payload | ConvertTo-Json -Compress)
 }
