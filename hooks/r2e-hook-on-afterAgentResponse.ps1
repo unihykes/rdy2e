@@ -16,7 +16,6 @@ class R2eHookAfterAgentResponseInputBody {
 
   [string] ToJsonString() {
     $h = @{
-      session_id = $this.session_id
       text       = $this.text
     }
     if ($null -ne $this.others -and $this.others.Count -gt 0) {

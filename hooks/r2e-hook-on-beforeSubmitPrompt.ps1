@@ -24,7 +24,6 @@ class R2eHookBeforeSubmitPromptInputBody {
 
   [string] ToJsonString() {
     $h = @{
-      session_id    = $this.session_id
       composer_mode = $this.composer_mode
       prompt        = $this.prompt
       attachments = $this.attachments

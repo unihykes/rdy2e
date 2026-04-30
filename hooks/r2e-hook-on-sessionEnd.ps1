@@ -27,7 +27,6 @@ class R2eHookSessionEndInputBody {
 
   [string] ToJsonString() {
     $h = @{
-      session_id            = $this.session_id
       reason                = $this.reason
       duration_ms           = $this.duration_ms
       is_background_agent   = $this.is_background_agent

@@ -22,7 +22,6 @@ class R2eHookAfterAgentThoughtInputBody {
 
   [string] ToJsonString() {
     $h = @{
-      session_id  = $this.session_id
       text        = $this.text
       duration_ms = $this.duration_ms
     }

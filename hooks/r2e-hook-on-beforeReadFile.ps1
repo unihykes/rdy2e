@@ -33,7 +33,6 @@ class R2eHookBeforeReadFileInputBody {
 
   [string] ToJsonString() {
     $h = @{
-      session_id  = $this.session_id
       file_path   = $this.file_path
       content     = $this.content
       attachments = $this.attachments

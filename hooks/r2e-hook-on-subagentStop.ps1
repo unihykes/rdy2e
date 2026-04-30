@@ -42,7 +42,6 @@ class R2eHookSubagentStopInputBody {
 
   [string] ToJsonString() {
     $h = @{
-      session_id             = $this.session_id
       subagent_type          = $this.subagent_type
       status                 = $this.status
       task                   = $this.task

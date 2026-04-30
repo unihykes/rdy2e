@@ -25,7 +25,6 @@ class R2eHookAfterShellExecutionInputBody {
 
   [string] ToJsonString() {
     $h = @{
-      session_id = $this.session_id
       command    = $this.command
       output     = $this.output
       duration = $this.duration

@@ -24,7 +24,6 @@ class R2eHookAfterMCPExecutionInputBody {
 
   [string] ToJsonString() {
     $h = @{
-      session_id  = $this.session_id
       tool_name   = $this.tool_name
       tool_input  = $this.tool_input
       result_json = $this.result_json

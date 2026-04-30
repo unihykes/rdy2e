@@ -22,7 +22,6 @@ class R2eHookAfterFileEditInputBody {
 
   [string] ToJsonString() {
     $h = @{
-      session_id = $this.session_id
       file_path  = $this.file_path
       edits     = $this.edits
     }

@@ -21,7 +21,6 @@ class R2eHookSessionStartInputBody {
 
   [string] ToJsonString() {
     $h = @{
-      session_id          = $this.session_id
       is_background_agent = $this.is_background_agent
       composer_mode       = $this.composer_mode
     }

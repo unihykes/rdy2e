@@ -36,7 +36,6 @@ class R2eHookPostToolUseInputBody {
 
   [string] ToJsonString() {
     $h = @{
-      session_id   = $this.session_id
       tool_name    = $this.tool_name
       tool_use_id  = $this.tool_use_id
       cwd          = $this.cwd

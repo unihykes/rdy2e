@@ -35,7 +35,6 @@ class R2eHookPreCompactInputBody {
 
   [string] ToJsonString() {
     $h = @{
-      session_id              = $this.session_id
       trigger                 = $this.trigger
       context_usage_percent   = $this.context_usage_percent
       context_tokens          = $this.context_tokens

@@ -31,7 +31,6 @@ class R2eHookStopInputBody {
 
   [string] ToJsonString() {
     $h = @{
-      session_id        = $this.session_id
       status            = $this.status
       loop_count        = $this.loop_count
       output_tokens     = $this.output_tokens

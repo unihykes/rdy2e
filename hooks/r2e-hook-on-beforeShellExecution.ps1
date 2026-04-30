@@ -24,7 +24,6 @@ class R2eHookBeforeShellExecutionInputBody {
 
   [string] ToJsonString() {
     $h = @{
-      session_id = $this.session_id
       command    = $this.command
       cwd     = $this.cwd
       sandbox = $this.sandbox

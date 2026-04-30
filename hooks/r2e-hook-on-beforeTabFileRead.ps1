@@ -18,7 +18,6 @@ class R2eHookBeforeTabFileReadInputBody {
 
   [string] ToJsonString() {
     $h = @{
-      session_id = $this.session_id
       file_path  = $this.file_path
       content   = $this.content
     }
