@@ -38,11 +38,34 @@ function Get-HookInputBody {
   if ([string]::IsNullOrWhiteSpace($bodyStr)) {
     return $head, ([R2eHookSessionStartInputBody]::new())
   }
+
+  # 外层整条 stdin 非合法 JSON：与 common 中 catch 类似，用正则抽出 sessionStart 已知字段；日志一律 ToJsonString
+  if (-not $head.IsValidJson) {
+    $inst = [R2eHookSessionStartInputBody]::new()
+    $m = [System.Text.RegularExpressions.Regex]::Match($bodyStr, '"session_id"\s*:\s*"([^"]*)"')
+    if ($m.Success) {
+      $inst.session_id = Get-PrettyUuid -Id $m.Groups[1].Value
+    }
+    $m = [System.Text.RegularExpressions.Regex]::Match($bodyStr, '"is_background_agent"\s*:\s*(true|false)')
+    if ($m.Success) {
+      $inst.is_background_agent = [bool]::Parse($m.Groups[1].Value)
+    }
+    $m = [System.Text.RegularExpressions.Regex]::Match($bodyStr, '"composer_mode"\s*:\s*"([^"]*)"')
+    if ($m.Success) {
+      $inst.composer_mode = $m.Groups[1].Value
+    }
+    $inst.others = @{
+      _invalidOuterJson = $true
+      _rawBodyStr       = $bodyStr
+    }
+    return $head, $inst
+  }
+
   try {
     $obj = $bodyStr | ConvertFrom-Json
     $inst = [R2eHookSessionStartInputBody]::new()
     if ($obj.PSObject.Properties["session_id"]) {
-      $inst.session_id = ([string]$obj.session_id -split "-", 2)[0]
+      $inst.session_id = Get-PrettyUuid -Id ([string]$obj.session_id)
       $obj.PSObject.Properties.Remove("session_id")
     }
     if ($obj.PSObject.Properties["is_background_agent"]) {
@@ -63,10 +86,7 @@ function Get-HookInputBody {
   }
   catch {
     $inst = [R2eHookSessionStartInputBody]::new()
-    $inst.others = @{
-      _exceptionMessage = [string]$_.Exception.Message
-      _rawBodyStr       = $bodyStr
-    }
+    $inst.others = @{ _errorMessage = "invalid json" }
     return $head, $inst
   }
 }
@@ -97,7 +117,7 @@ Add-Content -Encoding utf8 -Path (Get-HookProjectLogPath) -Value (
     "[$($head.ModelName)]" +
     "[$($head.HookEventName)]" +
     " " +
-    $(if ($head.IsValidJson) { $body.ToJsonString() } else { "invalid json" })
+    $( $body.ToJsonString() )
 )
 
 $response = Build-HookResponse -Body $body

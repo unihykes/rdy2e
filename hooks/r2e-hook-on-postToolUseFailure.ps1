@@ -1,4 +1,4 @@
-﻿param()
+param()
 
 . (Join-Path $PSScriptRoot "r2e-hook-common.ps1")
 
@@ -20,6 +20,15 @@ function Get-HookInputBody {
   if ([string]::IsNullOrWhiteSpace($bodyStr)) {
     return $head, ([R2eHookPostToolUseFailureInputBody]::new())
   }
+
+  if (-not $head.IsValidJson) {
+    $inst = [R2eHookPostToolUseFailureInputBody]::new()
+    $inst.others = @{
+      _invalidOuterJson = $true
+      _rawBodyStr       = $bodyStr
+    }
+    return $head, $inst
+  }
   try {
     $obj = $bodyStr | ConvertFrom-Json
     $inst = [R2eHookPostToolUseFailureInputBody]::new()
@@ -33,10 +42,7 @@ function Get-HookInputBody {
   }
   catch {
     $inst = [R2eHookPostToolUseFailureInputBody]::new()
-    $inst.others = @{
-      _exceptionMessage = [string]$_.Exception.Message
-      _rawBodyStr       = $bodyStr
-    }
+    $inst.others = @{ _errorMessage = "invalid json" }
     return $head, $inst
   }
 }
@@ -65,7 +71,7 @@ Add-Content -Encoding utf8 -Path (Get-HookProjectLogPath) -Value (
     "[$($head.ModelName)]" +
     "[$($head.HookEventName)]" +
     " " +
-    $(if ($head.IsValidJson) { $body.ToJsonString() } else { "invalid json" })
+    $( $body.ToJsonString() )
 )
 $response = Build-HookResponse
 Write-Output $response
