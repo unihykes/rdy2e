@@ -5,18 +5,15 @@ param()
 <#
 // 输入
 // session_id（可选）：此会话唯一标识，常与 conversation_id 相同。
+// composer_mode（可选）：如 agent / ask / edit，与 Cursor 实际载荷一致。
 {
   "prompt": "<user prompt text>",
-  "attachments": [
-    {
-      "type": "file" | "rule",
-      "file_path": "<absolute path>"
-    }
-  ]
+  "attachments": [ ... ]
 }
 #>
 class R2eHookBeforeSubmitPromptInputBody {
   [string]$session_id
+  [string]$composer_mode
   [string]$prompt
   [System.Object[]]$attachments
   [hashtable]$others
@@ -27,8 +24,9 @@ class R2eHookBeforeSubmitPromptInputBody {
 
   [string] ToJsonString() {
     $h = @{
-      session_id  = $this.session_id
-      prompt      = $this.prompt
+      session_id    = $this.session_id
+      composer_mode = $this.composer_mode
+      prompt        = $this.prompt
       attachments = $this.attachments
     }
     if ($null -ne $this.others -and $this.others.Count -gt 0) {
@@ -48,6 +46,7 @@ function Get-HookInputBody {
   if (-not $head.IsValidJson) {
     $inst = [R2eHookBeforeSubmitPromptInputBody]::new()
     Set-HookFallbackJsonQuotedField $inst session_id $bodyStr -Convert { param($cap) Get-PrettyUuid -Id $cap }
+    Set-HookFallbackJsonQuotedField $inst composer_mode $bodyStr
     Set-HookFallbackJsonQuotedField $inst prompt $bodyStr -Convert { param($cap) '...' }
     $inst.others = @{ _errorMessage = "invalid json" }
     return $head, $inst
@@ -63,6 +62,13 @@ function Get-HookInputBody {
         $inst.session_id = Get-PrettyUuid -Id ([string]$v)
       }
       $obj.PSObject.Properties.Remove("session_id")
+    }
+    if ($obj.PSObject.Properties["composer_mode"]) {
+      $v = $obj.composer_mode
+      if ($null -ne $v) {
+        $inst.composer_mode = [string]$v
+      }
+      $obj.PSObject.Properties.Remove("composer_mode")
     }
     if ($obj.PSObject.Properties["prompt"]) {
       $inst.prompt = '...'

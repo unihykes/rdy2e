@@ -5,6 +5,7 @@ param()
 <#
 // Input
 // session_id（可选）：此会话唯一标识，常与 conversation_id 相同。
+// output_tokens / input_tokens / cache_*：Cursor 可能在 stop 载荷中附带用量统计。
 {
   "status": "completed" | "aborted" | "error",
   "loop_count": 0
@@ -14,19 +15,30 @@ class R2eHookStopInputBody {
   [string]$session_id
   [string]$status
   [int]$loop_count
+  [long]$output_tokens
+  [long]$input_tokens
+  [long]$cache_read_tokens
+  [long]$cache_write_tokens
   [hashtable]$others
 
   R2eHookStopInputBody() {
     $this.loop_count = 0
+    $this.output_tokens = 0
+    $this.input_tokens = 0
+    $this.cache_read_tokens = 0
+    $this.cache_write_tokens = 0
   }
 
   [string] ToJsonString() {
     $h = @{
-      session_id  = $this.session_id
-      status      = $this.status
-      loop_count  = $this.loop_count
-    }
-    if ($null -ne $this.others -and $this.others.Count -gt 0) {
+      session_id        = $this.session_id
+      status            = $this.status
+      loop_count        = $this.loop_count
+      output_tokens     = $this.output_tokens
+      input_tokens      = $this.input_tokens
+      cache_read_tokens = $this.cache_read_tokens
+      cache_write_tokens = $this.cache_write_tokens
+    }    if ($null -ne $this.others -and $this.others.Count -gt 0) {
       $h.others = $this.others
     }
     return ($h | ConvertTo-Json -Compress -Depth 20)
@@ -56,7 +68,33 @@ function Set-StopHookFallbackJsonIntField {
   $cap = Get-HookFallbackRegexCapture -Text $Text -Pattern $pattern
   if ($null -eq $cap) { return }
 
-  $Target.$MemberName = [int]$cap
+  $Target.$MemberName = [long]$cap
+}
+
+function Set-StopHookFallbackJsonLongField {
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true, Position = 0)]
+    $Target,
+
+    [Parameter(Mandatory = $true, Position = 1)]
+    [ValidateNotNullOrEmpty()]
+    [string]$MemberName,
+
+    [Parameter(Mandatory = $true, Position = 2)]
+    [AllowEmptyString()]
+    [string]$Text,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateNotNullOrEmpty()]
+    [string]$JsonFieldName
+  )
+  $key = if ($PSBoundParameters.ContainsKey('JsonFieldName')) { $JsonFieldName } else { $MemberName }
+  $pattern = '"' + [regex]::Escape($key) + '"\s*:\s*(-?\d+)'
+  $cap = Get-HookFallbackRegexCapture -Text $Text -Pattern $pattern
+  if ($null -eq $cap) { return }
+
+  $Target.$MemberName = [long]$cap
 }
 
 function Get-HookInputBody {
@@ -71,6 +109,10 @@ function Get-HookInputBody {
     Set-HookFallbackJsonQuotedField $inst session_id $bodyStr -Convert { param($cap) Get-PrettyUuid -Id $cap }
     Set-HookFallbackJsonQuotedField $inst status $bodyStr
     Set-StopHookFallbackJsonIntField $inst loop_count $bodyStr
+    Set-StopHookFallbackJsonLongField $inst output_tokens $bodyStr
+    Set-StopHookFallbackJsonLongField $inst input_tokens $bodyStr
+    Set-StopHookFallbackJsonLongField $inst cache_read_tokens $bodyStr
+    Set-StopHookFallbackJsonLongField $inst cache_write_tokens $bodyStr
     $inst.others = @{ _errorMessage = "invalid json" }
     return $head, $inst
   }
@@ -99,6 +141,27 @@ function Get-HookInputBody {
         $inst.loop_count = [int]$v
       }
       $obj.PSObject.Properties.Remove("loop_count")
+    }
+
+    $tokenFields = @(
+      'output_tokens',
+      'input_tokens',
+      'cache_read_tokens',
+      'cache_write_tokens'
+    )
+    foreach ($tf in $tokenFields) {
+      if ($obj.PSObject.Properties[$tf]) {
+        $v = $obj.$tf
+        if ($null -ne $v) {
+          switch ($tf) {
+            'output_tokens' { $inst.output_tokens = [long]$v }
+            'input_tokens' { $inst.input_tokens = [long]$v }
+            'cache_read_tokens' { $inst.cache_read_tokens = [long]$v }
+            'cache_write_tokens' { $inst.cache_write_tokens = [long]$v }
+          }
+        }
+        $obj.PSObject.Properties.Remove($tf)
+      }
     }
 
     foreach ($prop in $obj.PSObject.Properties) {
