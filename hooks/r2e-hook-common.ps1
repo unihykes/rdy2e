@@ -215,7 +215,8 @@ function Normalize-R2eHookLogPathsInTree {
 }
 
 <#
-  写入 r2e-hook-events.log 前统一 JSON 序列化：先深度 round-trip 再规范化路径斜杠，避免改到内存中的原始对象。
+  写入按日归档的 hook 事件日志（r2e-hook-events-YYYY-MM-DD.log）前统一 JSON 序列化：
+  先深度 round-trip 再规范化路径斜杠，避免改到内存中的原始对象。
 #>
 function ConvertTo-R2eHookEventLogJson {
   [CmdletBinding()]
@@ -618,8 +619,9 @@ function Get-HookProjectLogPath {
   }
   $dir = Join-Path $projectDir ".cursor/log"
   New-Item -ItemType Directory -Path $dir -Force | Out-Null
-  $filePath = Join-Path $dir "r2e-hook-events.log"
-  return $filePath
+  $dateStamp = Get-Date -Format 'yyyy-MM-dd'
+  $fileName = "r2e-hook-events-$dateStamp.log"
+  return (Join-Path $dir $fileName)
 }
 <#
   供日志前缀等：典型为 UUID 样式；空白则原样返回，非空白则取第一个 "-" 前的短段。
