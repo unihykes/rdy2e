@@ -13,6 +13,120 @@ function Set-HookOutputUtf8 {
   [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 }
 
+<#
+  从整体 JSON 文本上按正则取第一个捕获组（用于非法 JSON 时的降级解析）。
+  无匹配时返回 $null。
+#>
+function Get-HookFallbackRegexCapture {
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true)]
+    [AllowEmptyString()]
+    [string]$Text,
+
+    [Parameter(Mandatory = $true)]
+    [string]$Pattern,
+
+    [Parameter(Mandatory = $false)]
+    [int]$CaptureGroup = 1
+  )
+  if ([string]::IsNullOrWhiteSpace($Text)) {
+    return $null
+  }
+  $m = [System.Text.RegularExpressions.Regex]::Match($Text, $Pattern)
+  if (-not $m.Success -or $CaptureGroup -lt 0 -or $CaptureGroup -ge $m.Groups.Count) {
+    return $null
+  }
+  return [string]$m.Groups[$CaptureGroup].Value
+}
+
+<#
+  非法 JSON 降级：解析 "jsonField"\s*:\s*"捕获" 写入对象成员；-JsonFieldName 缺省时与 MemberName 相同。
+  无匹配不写回。
+#>
+function Set-HookFallbackJsonQuotedField {
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true, Position = 0)]
+    $Target,
+
+    [Parameter(Mandatory = $true, Position = 1)]
+    [ValidateNotNullOrEmpty()]
+    [string]$MemberName,
+
+    [Parameter(Mandatory = $true, Position = 2)]
+    [AllowEmptyString()]
+    [string]$Text,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateNotNullOrEmpty()]
+    [string]$JsonFieldName,
+
+    [Parameter(Mandatory = $false)]
+    [scriptblock]$Convert = $null
+  )
+  $key = if ($PSBoundParameters.ContainsKey('JsonFieldName')) { $JsonFieldName } else { $MemberName }
+  $pattern = '"' + [regex]::Escape($key) + '"\s*:\s*"([^"]*)"'
+  $cap = Get-HookFallbackRegexCapture -Text $Text -Pattern $pattern
+  if ($null -eq $cap) { return }
+
+  if ($null -eq $Convert) {
+    $Target.$MemberName = $cap
+  } else {
+    $Target.$MemberName = & $Convert $cap
+  }
+}
+
+<#
+  非法 JSON 降级：解析 "jsonField"\s*:\s*(true|false)。
+#>
+function Set-HookFallbackJsonBoolField {
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true, Position = 0)]
+    $Target,
+
+    [Parameter(Mandatory = $true, Position = 1)]
+    [ValidateNotNullOrEmpty()]
+    [string]$MemberName,
+
+    [Parameter(Mandatory = $true, Position = 2)]
+    [AllowEmptyString()]
+    [string]$Text,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateNotNullOrEmpty()]
+    [string]$JsonFieldName
+  )
+  $key = if ($PSBoundParameters.ContainsKey('JsonFieldName')) { $JsonFieldName } else { $MemberName }
+  $pattern = '"' + [regex]::Escape($key) + '"\s*:\s*(true|false)'
+  $cap = Get-HookFallbackRegexCapture -Text $Text -Pattern $pattern
+  if ($null -eq $cap) { return }
+
+  $Target.$MemberName = [bool]::Parse($cap)
+}
+
+function Set-HookFallbackWorkspaceNameFromRoots {
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true, Position = 0)]
+    $Head,
+
+    [Parameter(Mandatory = $true, Position = 1)]
+    [AllowEmptyString()]
+    [string]$Text
+  )
+  $v = Get-HookFallbackRegexCapture -Text $Text -Pattern '"workspace_roots"\s*:\s*\[\s*"([^"]*)"'
+  if ($null -eq $v) { return }
+  if ([string]::IsNullOrWhiteSpace($v)) { return }
+
+  $normalizedRoot = ($v -replace "\\", "/").TrimEnd("/")
+  $leaf = Split-Path -Path $normalizedRoot -Leaf
+  if (-not [string]::IsNullOrWhiteSpace($leaf)) {
+    $Head.WorkspaceName = $leaf
+  }
+}
+
 function Get-HookInputHeadAndBody {
   $stdin = [Console]::OpenStandardInput()
   $reader = New-Object System.IO.StreamReader($stdin, [System.Text.UTF8Encoding]::new($false), $true)
@@ -81,25 +195,11 @@ function Get-HookInputHeadAndBody {
   } catch {
     $head.IsValidJson = $false
     $bodyStr = $rawInput
-    $m = [System.Text.RegularExpressions.Regex]::Match($rawInput, '"conversation_id"\s*:\s*"([^"]*)"')
-    if ($m.Success) { $head.ConversationId = $m.Groups[1].Value }
-    $m = [System.Text.RegularExpressions.Regex]::Match($rawInput, '"generation_id"\s*:\s*"([^"]*)"')
-    if ($m.Success) { $head.GenerationId = $m.Groups[1].Value }
-    $m = [System.Text.RegularExpressions.Regex]::Match($rawInput, '"model"\s*:\s*"([^"]*)"')
-    if ($m.Success) { $head.ModelName = $m.Groups[1].Value }
-    $m = [System.Text.RegularExpressions.Regex]::Match($rawInput, '"hook_event_name"\s*:\s*"([^"]*)"')
-    if ($m.Success) { $head.HookEventName = $m.Groups[1].Value }
-    $m = [System.Text.RegularExpressions.Regex]::Match($rawInput, '"workspace_roots"\s*:\s*\[\s*"([^"]*)"')
-    if ($m.Success) {
-      $firstRoot = $m.Groups[1].Value
-      if (-not [string]::IsNullOrWhiteSpace($firstRoot)) {
-        $normalizedRoot = ($firstRoot -replace "\\", "/").TrimEnd("/")
-        $leaf = Split-Path -Path $normalizedRoot -Leaf
-        if (-not [string]::IsNullOrWhiteSpace($leaf)) {
-          $head.WorkspaceName = $leaf
-        }
-      }
-    }
+    Set-HookFallbackJsonQuotedField $head ConversationId $rawInput -JsonFieldName conversation_id
+    Set-HookFallbackJsonQuotedField $head GenerationId $rawInput -JsonFieldName generation_id
+    Set-HookFallbackJsonQuotedField $head ModelName $rawInput -JsonFieldName model
+    Set-HookFallbackJsonQuotedField $head HookEventName $rawInput -JsonFieldName hook_event_name
+    Set-HookFallbackWorkspaceNameFromRoots $head $rawInput
   }
 
   $bodyStr = [string]$bodyStr

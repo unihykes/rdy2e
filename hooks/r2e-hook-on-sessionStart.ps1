@@ -41,18 +41,9 @@ function Get-HookInputBody {
   
   if (-not $head.IsValidJson) {
     $inst = [R2eHookSessionStartInputBody]::new()
-    $m = [System.Text.RegularExpressions.Regex]::Match($bodyStr, '"session_id"\s*:\s*"([^"]*)"')
-    if ($m.Success) {
-      $inst.session_id = Get-PrettyUuid -Id $m.Groups[1].Value
-    }
-    $m = [System.Text.RegularExpressions.Regex]::Match($bodyStr, '"is_background_agent"\s*:\s*(true|false)')
-    if ($m.Success) {
-      $inst.is_background_agent = [bool]::Parse($m.Groups[1].Value)
-    }
-    $m = [System.Text.RegularExpressions.Regex]::Match($bodyStr, '"composer_mode"\s*:\s*"([^"]*)"')
-    if ($m.Success) {
-      $inst.composer_mode = $m.Groups[1].Value
-    }
+    Set-HookFallbackJsonQuotedField $inst session_id $bodyStr -Convert { param($cap) Get-PrettyUuid -Id $cap }
+    Set-HookFallbackJsonBoolField $inst is_background_agent $bodyStr
+    Set-HookFallbackJsonQuotedField $inst composer_mode $bodyStr
     $inst.others = @{ _errorMessage = "invalid json" }
     return $head, $inst
   }
