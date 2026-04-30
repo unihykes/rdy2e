@@ -607,8 +607,9 @@ function Get-HookInputHeadAndBody {
   }
 
   $bodyStr = [string]$bodyStr
-  $bodyStr = [System.Text.RegularExpressions.Regex]::Replace($bodyStr, "(\r?\n){3,}", "`n`n")
-  $bodyStr = [System.Text.RegularExpressions.Regex]::Replace($bodyStr, "(?:\\r\\n|\\n){3,}", "\n\n")
+  <# 勿对已是合法 JSON 的 $bodyStr 做全文替换：\n 转义在 "text" 等字段内可被
+     (?:\\r\\n|\\n){3,} 误匹配，且替换串 "\n\n" 会写入真实换行符，破坏 JSON，
+     导致 afterAgentResponse 等二次 ConvertFrom-Json 失败并报 invalid json。 #>
   return $head, $bodyStr
 }
 
