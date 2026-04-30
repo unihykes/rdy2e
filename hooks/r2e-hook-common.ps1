@@ -108,44 +108,28 @@ function Get-HookInputHeadAndBody {
   return $head, $bodyStr
 }
 
-function Get-HookProjectDir {
+function Get-HookProjectLogPath {
   $projectDir = $env:CURSOR_PROJECT_DIR
   if ([string]::IsNullOrWhiteSpace($projectDir)) {
     $projectDir = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
   }
-  return $projectDir
-}
-
-function Log-HookEvent {
-  param(
-    [Parameter(Mandatory = $true)]
-    [R2eHookInputHead]$Head,
-    [Parameter(Mandatory = $true)]
-    [AllowEmptyString()]
-    [string]$BodyLog
-  )
-
-  $projectDir = Get-HookProjectDir
   $dir = Join-Path $projectDir ".cursor/log"
+  New-Item -ItemType Directory -Path $dir -Force | Out-Null
   $filePath = Join-Path $dir "r2e-hook-events.log"
-  $parentDir = Split-Path -Path $filePath -Parent
-  New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
-
-  $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
-  $conversationIdShort = [string]$Head.ConversationId
-  if (-not [string]::IsNullOrWhiteSpace($conversationIdShort)) {
-    $conversationIdShort = ($conversationIdShort -split "-", 2)[0]
+  return $filePath
+}
+<#
+  供日志前缀等：典型为 UUID 样式；空白则原样返回，非空白则取第一个 "-" 前的短段。
+#>
+function Get-PrettyUuid {
+  param(
+    [Parameter(Mandatory = $false)]
+    [AllowEmptyString()]
+    [string]$Id
+  )
+  $s = [string]$Id
+  if (-not [string]::IsNullOrWhiteSpace($s)) {
+    return ($s -split "-", 2)[0]
   }
-  $generationIdShort = [string]$Head.GenerationId
-  if (-not [string]::IsNullOrWhiteSpace($generationIdShort)) {
-    $generationIdShort = ($generationIdShort -split "-", 2)[0]
-  }
-  $linePrefix = "[$timestamp][$($Head.WorkspaceName)][$conversationIdShort][$generationIdShort][$($Head.ModelName)][$($Head.HookEventName)]"
-
-  if ($Head.IsValidJson) {
-    Add-Content -Path $filePath -Value "$LinePrefix $BodyLog" -Encoding utf8
-  }
-  else {
-    Add-Content -Path $filePath -Value "$LinePrefix invalid json" -Encoding utf8
-  }
+  return $s
 }

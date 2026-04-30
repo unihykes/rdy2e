@@ -34,7 +34,16 @@ function Build-HookResponse {
 Set-HookOutputUtf8
 $head, $bodyStr = Get-HookInputHeadAndBody
 $body = Edit-HookInputBody -BodyStr $bodyStr
-Log-HookEvent -Head $head -BodyLog $body
+Add-Content -Encoding utf8 -Path (Get-HookProjectLogPath) -Value (
+  "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff')]" +
+    "[$($head.WorkspaceName)]" +
+    "[$(Get-PrettyUuid -Id $head.ConversationId)]" +
+    "[$(Get-PrettyUuid -Id $head.GenerationId)]" +
+    "[$($head.ModelName)]" +
+    "[$($head.HookEventName)]" +
+    " " +
+    $(if ($head.IsValidJson) { $body } else { "invalid json" })
+)
 $response = Build-HookResponse
 Write-Output $response
 exit 0
