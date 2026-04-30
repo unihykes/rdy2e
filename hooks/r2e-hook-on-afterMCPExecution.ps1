@@ -2,16 +2,62 @@ param()
 
 . (Join-Path $PSScriptRoot "r2e-hook-common.ps1")
 
+<#
+字段	类型	描述
+tool_name	string	执行的 MCP 工具名称
+tool_input	string	传递给该工具的 JSON 参数字符串
+result_json	string	工具响应结果的 JSON 字符串
+duration	number	工具执行耗时 (毫秒) ，不包括等待审批的时间
+#>
 class R2eHookAfterMCPExecutionInputBody {
+  [string]$tool_name
+  [hashtable]$tool_input
+  [string]$result_json
+  [long]$duration
   [hashtable]$others
 
+  R2eHookAfterMCPExecutionInputBody() {
+    $this.duration = 0
+  }
+
   [string] ToJsonString() {
-    $h = @{}
+    $h = @{
+      tool_name   = $this.tool_name
+      tool_input  = $this.tool_input
+      result_json = $this.result_json
+      duration    = $this.duration
+    }
     if ($null -ne $this.others -and $this.others.Count -gt 0) {
       $h.others = $this.others
     }
     return ($h | ConvertTo-Json -Compress -Depth 20)
   }
+}
+
+function Set-AfterMcpHookFallbackJsonLongField {
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true, Position = 0)]
+    $Target,
+
+    [Parameter(Mandatory = $true, Position = 1)]
+    [ValidateNotNullOrEmpty()]
+    [string]$MemberName,
+
+    [Parameter(Mandatory = $true, Position = 2)]
+    [AllowEmptyString()]
+    [string]$Text,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateNotNullOrEmpty()]
+    [string]$JsonFieldName
+  )
+  $key = if ($PSBoundParameters.ContainsKey('JsonFieldName')) { $JsonFieldName } else { $MemberName }
+  $pattern = '"' + [regex]::Escape($key) + '"\s*:\s*(-?\d+)'
+  $cap = Get-HookFallbackRegexCapture -Text $Text -Pattern $pattern
+  if ($null -eq $cap) { return }
+
+  $Target.$MemberName = [long]$cap
 }
 
 function Get-HookInputBody {
@@ -23,12 +69,46 @@ function Get-HookInputBody {
 
   if (-not $head.IsValidJson) {
     $inst = [R2eHookAfterMCPExecutionInputBody]::new()
+    Set-HookFallbackJsonQuotedField $inst tool_name $bodyStr
+    Set-HookFallbackJsonQuotedField $inst result_json $bodyStr
+    Set-AfterMcpHookFallbackJsonLongField $inst duration $bodyStr
     $inst.others = @{ _errorMessage = "invalid json" }
     return $head, $inst
   }
+
   try {
     $obj = $bodyStr | ConvertFrom-Json
     $inst = [R2eHookAfterMCPExecutionInputBody]::new()
+
+    if ($obj.PSObject.Properties["tool_name"]) {
+      $inst.tool_name = [string]$obj.tool_name
+      $obj.PSObject.Properties.Remove("tool_name")
+    }
+    if ($obj.PSObject.Properties["tool_input"]) {
+      $inst.tool_input = ConvertFrom-R2eHookMcpToolInputForLog -ToolInput $obj.tool_input
+      $obj.PSObject.Properties.Remove("tool_input")
+    }
+    if ($obj.PSObject.Properties["result_json"]) {
+      $v = $obj.result_json
+      if ($null -ne $v) {
+        if ($v -is [string]) {
+          $inst.result_json = $v
+        } elseif ($v -is [System.Management.Automation.PSCustomObject]) {
+          $inst.result_json = ($v | ConvertTo-Json -Compress -Depth 20)
+        } else {
+          $inst.result_json = [string]$v
+        }
+      }
+      $obj.PSObject.Properties.Remove("result_json")
+    }
+    if ($obj.PSObject.Properties["duration"]) {
+      $v = $obj.duration
+      if ($null -ne $v) {
+        $inst.duration = [long]$v
+      }
+      $obj.PSObject.Properties.Remove("duration")
+    }
+
     foreach ($prop in $obj.PSObject.Properties) {
       if ($null -eq $inst.others) {
         $inst.others = @{}

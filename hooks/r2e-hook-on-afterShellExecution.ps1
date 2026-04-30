@@ -2,16 +2,63 @@ param()
 
 . (Join-Path $PSScriptRoot "r2e-hook-common.ps1")
 
+<#
+Field	Type	Description
+command	string	执行的完整终端命令
+output	string	从终端捕获的完整输出
+duration	number	执行该 shell 命令所花费的时间（毫秒），不包括等待审批的时间
+sandbox	boolean	该命令是否在沙盒环境中运行
+#>
 class R2eHookAfterShellExecutionInputBody {
+  [string]$command
+  [string]$output
+  [long]$duration
+  [bool]$sandbox
   [hashtable]$others
 
+  R2eHookAfterShellExecutionInputBody() {
+    $this.duration = 0
+    $this.sandbox = $false
+  }
+
   [string] ToJsonString() {
-    $h = @{}
+    $h = @{
+      command  = $this.command
+      output   = $this.output
+      duration = $this.duration
+      sandbox  = $this.sandbox
+    }
     if ($null -ne $this.others -and $this.others.Count -gt 0) {
       $h.others = $this.others
     }
     return ($h | ConvertTo-Json -Compress -Depth 20)
   }
+}
+
+function Set-AfterShellHookFallbackJsonLongField {
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true, Position = 0)]
+    $Target,
+
+    [Parameter(Mandatory = $true, Position = 1)]
+    [ValidateNotNullOrEmpty()]
+    [string]$MemberName,
+
+    [Parameter(Mandatory = $true, Position = 2)]
+    [AllowEmptyString()]
+    [string]$Text,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateNotNullOrEmpty()]
+    [string]$JsonFieldName
+  )
+  $key = if ($PSBoundParameters.ContainsKey('JsonFieldName')) { $JsonFieldName } else { $MemberName }
+  $pattern = '"' + [regex]::Escape($key) + '"\s*:\s*(-?\d+)'
+  $cap = Get-HookFallbackRegexCapture -Text $Text -Pattern $pattern
+  if ($null -eq $cap) { return }
+
+  $Target.$MemberName = [long]$cap
 }
 
 function Get-HookInputBody {
@@ -23,12 +70,38 @@ function Get-HookInputBody {
 
   if (-not $head.IsValidJson) {
     $inst = [R2eHookAfterShellExecutionInputBody]::new()
+    Set-HookFallbackJsonQuotedField $inst command $bodyStr -Convert { param($cap) '...' }
+    Set-HookFallbackJsonQuotedField $inst output $bodyStr -Convert { param($cap) '...' }
+    Set-AfterShellHookFallbackJsonLongField $inst duration $bodyStr
+    Set-HookFallbackJsonBoolField $inst sandbox $bodyStr
     $inst.others = @{ _errorMessage = "invalid json" }
     return $head, $inst
   }
+
   try {
     $obj = $bodyStr | ConvertFrom-Json
     $inst = [R2eHookAfterShellExecutionInputBody]::new()
+
+    if ($obj.PSObject.Properties["command"]) {
+      $inst.command = '...'
+      $obj.PSObject.Properties.Remove("command")
+    }
+    if ($obj.PSObject.Properties["output"]) {
+      $inst.output = '...'
+      $obj.PSObject.Properties.Remove("output")
+    }
+    if ($obj.PSObject.Properties["duration"]) {
+      $v = $obj.duration
+      if ($null -ne $v) {
+        $inst.duration = [long]$v
+      }
+      $obj.PSObject.Properties.Remove("duration")
+    }
+    if ($obj.PSObject.Properties["sandbox"]) {
+      $inst.sandbox = [bool]$obj.sandbox
+      $obj.PSObject.Properties.Remove("sandbox")
+    }
+
     foreach ($prop in $obj.PSObject.Properties) {
       if ($null -eq $inst.others) {
         $inst.others = @{}

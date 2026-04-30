@@ -2,11 +2,31 @@ param()
 
 . (Join-Path $PSScriptRoot "r2e-hook-common.ps1")
 
+<#
+// beforeMCPExecution 输入
+{
+  "tool_name": "<tool name>",
+  "tool_input": "<json params>"
+}
+// 加上以下之一：
+{ "url": "<server url>" }
+// 或：
+{ "command": "<command string>" }
+#>
 class R2eHookBeforeMCPExecutionInputBody {
+  [string]$tool_name
+  [hashtable]$tool_input
+  [string]$url
+  [string]$command
   [hashtable]$others
 
   [string] ToJsonString() {
-    $h = @{}
+    $h = @{
+      tool_name  = $this.tool_name
+      tool_input = $this.tool_input
+      url        = $this.url
+      command    = $this.command
+    }
     if ($null -ne $this.others -and $this.others.Count -gt 0) {
       $h.others = $this.others
     }
@@ -23,12 +43,36 @@ function Get-HookInputBody {
 
   if (-not $head.IsValidJson) {
     $inst = [R2eHookBeforeMCPExecutionInputBody]::new()
+    Set-HookFallbackJsonQuotedField $inst tool_name $bodyStr
+    Set-HookFallbackJsonQuotedField $inst url $bodyStr
+    Set-HookFallbackJsonQuotedField $inst command $bodyStr -Convert { param($cap) '...' }
     $inst.others = @{ _errorMessage = "invalid json" }
     return $head, $inst
   }
+
   try {
     $obj = $bodyStr | ConvertFrom-Json
     $inst = [R2eHookBeforeMCPExecutionInputBody]::new()
+
+    if ($obj.PSObject.Properties["tool_name"]) {
+      $inst.tool_name = [string]$obj.tool_name
+      $obj.PSObject.Properties.Remove("tool_name")
+    }
+    if ($obj.PSObject.Properties["tool_input"]) {
+      $inst.tool_input = ConvertFrom-R2eHookMcpToolInputForLog -ToolInput $obj.tool_input
+      $obj.PSObject.Properties.Remove("tool_input")
+    }
+    if ($obj.PSObject.Properties["url"]) {
+      $inst.url = [string]$obj.url
+      $obj.PSObject.Properties.Remove("url")
+    }
+    if ($obj.PSObject.Properties["command"]) {
+      if ($null -ne $obj.command) {
+        $inst.command = '...'
+      }
+      $obj.PSObject.Properties.Remove("command")
+    }
+
     foreach ($prop in $obj.PSObject.Properties) {
       if ($null -eq $inst.others) {
         $inst.others = @{}

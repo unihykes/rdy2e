@@ -2,11 +2,30 @@ param()
 
 . (Join-Path $PSScriptRoot "r2e-hook-common.ps1")
 
+<#
+// beforeShellExecution 输入
+{
+  "command": "<full terminal command>",
+  "cwd": "<current working directory>",
+  "sandbox": false
+}
+#>
 class R2eHookBeforeShellExecutionInputBody {
+  [string]$command
+  [string]$cwd
+  [bool]$sandbox
   [hashtable]$others
 
+  R2eHookBeforeShellExecutionInputBody() {
+    $this.sandbox = $false
+  }
+
   [string] ToJsonString() {
-    $h = @{}
+    $h = @{
+      command = $this.command
+      cwd     = $this.cwd
+      sandbox = $this.sandbox
+    }
     if ($null -ne $this.others -and $this.others.Count -gt 0) {
       $h.others = $this.others
     }
@@ -23,12 +42,28 @@ function Get-HookInputBody {
 
   if (-not $head.IsValidJson) {
     $inst = [R2eHookBeforeShellExecutionInputBody]::new()
+    Set-HookFallbackJsonQuotedField $inst command $bodyStr -Convert { param($cap) '...' }
+    Set-HookFallbackJsonQuotedField $inst cwd $bodyStr
+    Set-HookFallbackJsonBoolField $inst sandbox $bodyStr
     $inst.others = @{ _errorMessage = "invalid json" }
     return $head, $inst
   }
+
   try {
     $obj = $bodyStr | ConvertFrom-Json
     $inst = [R2eHookBeforeShellExecutionInputBody]::new()
+    if ($obj.PSObject.Properties["command"]) {
+      $inst.command = '...'
+      $obj.PSObject.Properties.Remove("command")
+    }
+    if ($obj.PSObject.Properties["cwd"]) {
+      $inst.cwd = [string]$obj.cwd
+      $obj.PSObject.Properties.Remove("cwd")
+    }
+    if ($obj.PSObject.Properties["sandbox"]) {
+      $inst.sandbox = [bool]$obj.sandbox
+      $obj.PSObject.Properties.Remove("sandbox")
+    }
     foreach ($prop in $obj.PSObject.Properties) {
       if ($null -eq $inst.others) {
         $inst.others = @{}

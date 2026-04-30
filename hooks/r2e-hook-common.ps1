@@ -152,6 +152,61 @@ function ConvertTo-R2eHookMaskedObjectHashtable {
   return $ht
 }
 
+<#
+  ConvertFrom-Json 得到的 tool_input（PSCustomObject）浅拷贝为 Hashtable，便于日志序列化；
+  顶层键名为 context 的项统一改写为 "..."（与其它 hook 中对敏感字符串的处理一致）。
+  非 PSCustomObject 时返回空 Hashtable（字符串形式的 tool_input 由 ConvertFrom-R2eHookMcpToolInputForLog 先解析再传入）。
+#>
+function ConvertTo-R2eHookMaskedToolInputHashtable {
+  param([AllowNull()] [object]$InputObject)
+
+  $ht = @{}
+  if ($null -eq $InputObject) {
+    return $ht
+  }
+  if ($InputObject -isnot [System.Management.Automation.PSCustomObject]) {
+    return $ht
+  }
+  foreach ($p in $InputObject.PSObject.Properties) {
+    if ($p.Name -eq 'context') {
+      $ht[$p.Name] = '...'
+    } else {
+      $ht[$p.Name] = $p.Value
+    }
+  }
+  return $ht
+}
+
+<#
+  before/after MCP hook：将 tool_input（对象或 JSON 字符串）转为带 context 脱敏的 Hashtable，供日志序列化。
+#>
+function ConvertFrom-R2eHookMcpToolInputForLog {
+  param([AllowNull()] [object]$ToolInput)
+
+  if ($null -eq $ToolInput) {
+    return @{}
+  }
+  if ($ToolInput -is [System.Management.Automation.PSCustomObject]) {
+    return ConvertTo-R2eHookMaskedToolInputHashtable -InputObject $ToolInput
+  }
+  if ($ToolInput -is [string]) {
+    $s = [string]$ToolInput
+    if ([string]::IsNullOrWhiteSpace($s)) {
+      return @{}
+    }
+    try {
+      $nested = $s | ConvertFrom-Json
+      if ($nested -is [System.Management.Automation.PSCustomObject]) {
+        return ConvertTo-R2eHookMaskedToolInputHashtable -InputObject $nested
+      }
+    } catch {
+      return @{ _unparsed = '...' }
+    }
+    return @{ _unparsed = '...' }
+  }
+  return @{ _value = '...' }
+}
+
 function Get-HookInputHeadAndBody {
   $stdin = [Console]::OpenStandardInput()
   $reader = New-Object System.IO.StreamReader($stdin, [System.Text.UTF8Encoding]::new($false), $true)
