@@ -207,6 +207,55 @@ function ConvertFrom-R2eHookMcpToolInputForLog {
   return @{ _value = '...' }
 }
 
+<#
+  afterFileEdit：将单条 edit（PSCustomObject）浅拷贝为 Hashtable；old_string、new_string 统一为 "..."
+#>
+function ConvertTo-R2eHookMaskedFileEditItemHashtable {
+  param([AllowNull()] [object]$InputObject)
+
+  if ($null -eq $InputObject) {
+    return @{}
+  }
+  if ($InputObject -isnot [System.Management.Automation.PSCustomObject]) {
+    return @{ _value = '...' }
+  }
+  $ht = @{}
+  foreach ($p in $InputObject.PSObject.Properties) {
+    if ($p.Name -eq 'old_string' -or $p.Name -eq 'new_string') {
+      $ht[$p.Name] = '...'
+    } else {
+      $ht[$p.Name] = $p.Value
+    }
+  }
+  return $ht
+}
+
+<#
+  afterFileEdit：edits 为数组或单对象时，转为 Hashtable[]，每条内的 old_string / new_string 已脱敏。
+#>
+function ConvertFrom-R2eHookFileEditsForLog {
+  param([AllowNull()] [object]$Edits)
+
+  if ($null -eq $Edits) {
+    return @()
+  }
+  if ($Edits -is [System.Management.Automation.PSCustomObject]) {
+    return @((ConvertTo-R2eHookMaskedFileEditItemHashtable -InputObject $Edits))
+  }
+  if ($Edits -isnot [System.Array]) {
+    return @(@{ _value = '...' })
+  }
+  $out = [System.Collections.ArrayList]@()
+  foreach ($item in $Edits) {
+    if ($item -is [System.Management.Automation.PSCustomObject]) {
+      [void]$out.Add((ConvertTo-R2eHookMaskedFileEditItemHashtable -InputObject $item))
+    } else {
+      [void]$out.Add(@{ _value = '...' })
+    }
+  }
+  return @($out)
+}
+
 function Get-HookInputHeadAndBody {
   $stdin = [Console]::OpenStandardInput()
   $reader = New-Object System.IO.StreamReader($stdin, [System.Text.UTF8Encoding]::new($false), $true)

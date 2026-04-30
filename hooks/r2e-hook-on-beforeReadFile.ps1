@@ -2,16 +2,75 @@ param()
 
 . (Join-Path $PSScriptRoot "r2e-hook-common.ps1")
 
+<#
+// 输入
+{
+  "file_path": "<absolute path>",
+  "content": "<file contents>",
+  "attachments": [
+    {
+      "type": "file" | "rule",
+      "file_path": "<absolute path>"
+    }
+  ]
+}
+输入字段	类型	描述
+file_path	string	将要读取的文件的绝对路径
+content	string	文件的完整内容
+attachments	array	与提示关联的上下文附件。每个条目都包含一个 type ("file" 或 "rule") 和一个 file_path。
+#>
 class R2eHookBeforeReadFileInputBody {
+  [string]$file_path
+  [string]$content
+  [System.Object[]]$attachments
   [hashtable]$others
 
+  R2eHookBeforeReadFileInputBody() {
+    $this.attachments = @()
+  }
+
   [string] ToJsonString() {
-    $h = @{}
+    $h = @{
+      file_path   = $this.file_path
+      content     = $this.content
+      attachments = $this.attachments
+    }
     if ($null -ne $this.others -and $this.others.Count -gt 0) {
       $h.others = $this.others
     }
     return ($h | ConvertTo-Json -Compress -Depth 20)
   }
+}
+
+function ConvertFrom-R2eHookBeforeReadFileAttachmentsForLog {
+  param([AllowNull()] [object]$Attachments)
+
+  if ($null -eq $Attachments) {
+    return @()
+  }
+  if ($Attachments -is [System.Management.Automation.PSCustomObject]) {
+    $ht = @{}
+    foreach ($p in $Attachments.PSObject.Properties) {
+      $ht[$p.Name] = $p.Value
+    }
+    return @($ht)
+  }
+  if ($Attachments -isnot [System.Array]) {
+    return @(@{ _value = '...' })
+  }
+  $out = [System.Collections.ArrayList]@()
+  foreach ($item in $Attachments) {
+    if ($item -is [System.Management.Automation.PSCustomObject]) {
+      $ht = @{}
+      foreach ($p in $item.PSObject.Properties) {
+        $ht[$p.Name] = $p.Value
+      }
+      [void]$out.Add($ht)
+    } else {
+      [void]$out.Add(@{ _value = '...' })
+    }
+  }
+  return @($out)
 }
 
 function Get-HookInputBody {
@@ -23,12 +82,32 @@ function Get-HookInputBody {
 
   if (-not $head.IsValidJson) {
     $inst = [R2eHookBeforeReadFileInputBody]::new()
+    Set-HookFallbackJsonQuotedField $inst file_path $bodyStr
+    Set-HookFallbackJsonQuotedField $inst content $bodyStr -Convert { param($cap) '...' }
     $inst.others = @{ _errorMessage = "invalid json" }
     return $head, $inst
   }
+
   try {
     $obj = $bodyStr | ConvertFrom-Json
     $inst = [R2eHookBeforeReadFileInputBody]::new()
+
+    if ($obj.PSObject.Properties["file_path"]) {
+      $v = $obj.file_path
+      if ($null -ne $v) {
+        $inst.file_path = [string]$v
+      }
+      $obj.PSObject.Properties.Remove("file_path")
+    }
+    if ($obj.PSObject.Properties["content"]) {
+      $inst.content = '...'
+      $obj.PSObject.Properties.Remove("content")
+    }
+    if ($obj.PSObject.Properties["attachments"]) {
+      $inst.attachments = ConvertFrom-R2eHookBeforeReadFileAttachmentsForLog -Attachments $obj.attachments
+      $obj.PSObject.Properties.Remove("attachments")
+    }
+
     foreach ($prop in $obj.PSObject.Properties) {
       if ($null -eq $inst.others) {
         $inst.others = @{}

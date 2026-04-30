@@ -2,11 +2,27 @@ param()
 
 . (Join-Path $PSScriptRoot "r2e-hook-common.ps1")
 
+<#
+// 输入
+{
+  "file_path": "<absolute path>",
+  "edits": [{ "old_string": "<search>", "new_string": "<replace>" }]
+}
+#>
 class R2eHookAfterFileEditInputBody {
+  [string]$file_path
+  [System.Object[]]$edits
   [hashtable]$others
 
+  R2eHookAfterFileEditInputBody() {
+    $this.edits = @()
+  }
+
   [string] ToJsonString() {
-    $h = @{}
+    $h = @{
+      file_path = $this.file_path
+      edits     = $this.edits
+    }
     if ($null -ne $this.others -and $this.others.Count -gt 0) {
       $h.others = $this.others
     }
@@ -23,12 +39,27 @@ function Get-HookInputBody {
 
   if (-not $head.IsValidJson) {
     $inst = [R2eHookAfterFileEditInputBody]::new()
+    Set-HookFallbackJsonQuotedField $inst file_path $bodyStr
     $inst.others = @{ _errorMessage = "invalid json" }
     return $head, $inst
   }
+
   try {
     $obj = $bodyStr | ConvertFrom-Json
     $inst = [R2eHookAfterFileEditInputBody]::new()
+
+    if ($obj.PSObject.Properties["file_path"]) {
+      $v = $obj.file_path
+      if ($null -ne $v) {
+        $inst.file_path = [string]$v
+      }
+      $obj.PSObject.Properties.Remove("file_path")
+    }
+    if ($obj.PSObject.Properties["edits"]) {
+      $inst.edits = ConvertFrom-R2eHookFileEditsForLog -Edits $obj.edits
+      $obj.PSObject.Properties.Remove("edits")
+    }
+
     foreach ($prop in $obj.PSObject.Properties) {
       if ($null -eq $inst.others) {
         $inst.others = @{}
