@@ -111,6 +111,7 @@ function Get-HookInputBody {
     }
     if ($obj.PSObject.Properties["tool_output"]) {
       $inst.tool_output = ConvertFrom-R2eHookToolOutputForLog -ToolOutput $obj.tool_output
+      Apply-R2eHookPostToolUseOutputFilePathDedup -ToolOutputHt $inst.tool_output -ToolInputHt $inst.tool_input
       $obj.PSObject.Properties.Remove("tool_output")
     }
     foreach ($prop in $obj.PSObject.Properties) {

@@ -194,6 +194,35 @@ function ConvertFrom-R2eHookToolOutputForLog {
 }
 
 <#
+  postToolUse：若 tool_output 与 tool_input 顶层的 file_path 指向同一路径（仅日志），将 output 侧改为 "..."
+  以减少与 tool_input 的重复。官方未承诺二者总相等；故仅在字符串归一化后一致时才精简。
+#>
+function Apply-R2eHookPostToolUseOutputFilePathDedup {
+  param(
+    [hashtable]$ToolOutputHt,
+    [hashtable]$ToolInputHt
+  )
+  if ($null -eq $ToolOutputHt -or $ToolOutputHt.Count -eq 0) { return }
+  if ($null -eq $ToolInputHt -or $ToolInputHt.Count -eq 0) { return }
+  if (-not ($ToolOutputHt.ContainsKey('file_path') -and $ToolInputHt.ContainsKey('file_path'))) { return }
+
+  $out = $ToolOutputHt['file_path']
+  $inn = $ToolInputHt['file_path']
+  if ($null -eq $out -or $null -eq $inn) { return }
+  if ($out -isnot [string] -or $inn -isnot [string]) { return }
+
+  $a = [string]$inn
+  $b = [string]$out
+  if ([string]::IsNullOrWhiteSpace($a) -or [string]::IsNullOrWhiteSpace($b)) { return }
+
+  $na = ($a -replace '\\', '/').TrimEnd('/')
+  $nb = ($b -replace '\\', '/').TrimEnd('/')
+  if ($na -ieq $nb) {
+    $ToolOutputHt['file_path'] = '...'
+  }
+}
+
+<#
   ConvertFrom-Json 得到的 tool_input（PSCustomObject）浅拷贝为 Hashtable，便于日志序列化；
   顶层键名为 context 的项统一改写为 "..."（与其它 hook 中对敏感字符串的处理一致）。
   非 PSCustomObject 时返回空 Hashtable（字符串形式的 tool_input 由 ConvertFrom-R2eHookMcpToolInputForLog 先解析再传入）。
