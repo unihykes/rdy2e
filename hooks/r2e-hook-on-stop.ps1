@@ -37,7 +37,8 @@ class R2eHookStopInputBody {
       input_tokens      = $this.input_tokens
       cache_read_tokens = $this.cache_read_tokens
       cache_write_tokens = $this.cache_write_tokens
-    }    if ($null -ne $this.others -and $this.others.Count -gt 0) {
+    }
+    if ($null -ne $this.others -and $this.others.Count -gt 0) {
       $h.others = $this.others
     }
     return (ConvertTo-R2eHookEventLogJson -InputObject $h)
