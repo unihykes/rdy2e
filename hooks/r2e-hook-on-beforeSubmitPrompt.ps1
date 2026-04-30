@@ -4,6 +4,7 @@ param()
 
 <#
 // 输入
+// session_id（可选）：此会话唯一标识，常与 conversation_id 相同。
 {
   "prompt": "<user prompt text>",
   "attachments": [
@@ -15,6 +16,7 @@ param()
 }
 #>
 class R2eHookBeforeSubmitPromptInputBody {
+  [string]$session_id
   [string]$prompt
   [System.Object[]]$attachments
   [hashtable]$others
@@ -25,6 +27,7 @@ class R2eHookBeforeSubmitPromptInputBody {
 
   [string] ToJsonString() {
     $h = @{
+      session_id  = $this.session_id
       prompt      = $this.prompt
       attachments = $this.attachments
     }
@@ -44,6 +47,7 @@ function Get-HookInputBody {
 
   if (-not $head.IsValidJson) {
     $inst = [R2eHookBeforeSubmitPromptInputBody]::new()
+    Set-HookFallbackJsonQuotedField $inst session_id $bodyStr -Convert { param($cap) Get-PrettyUuid -Id $cap }
     Set-HookFallbackJsonQuotedField $inst prompt $bodyStr -Convert { param($cap) '...' }
     $inst.others = @{ _errorMessage = "invalid json" }
     return $head, $inst
@@ -53,6 +57,13 @@ function Get-HookInputBody {
     $obj = $bodyStr | ConvertFrom-Json
     $inst = [R2eHookBeforeSubmitPromptInputBody]::new()
 
+    if ($obj.PSObject.Properties["session_id"]) {
+      $v = $obj.session_id
+      if ($null -ne $v) {
+        $inst.session_id = Get-PrettyUuid -Id ([string]$v)
+      }
+      $obj.PSObject.Properties.Remove("session_id")
+    }
     if ($obj.PSObject.Properties["prompt"]) {
       $inst.prompt = '...'
       $obj.PSObject.Properties.Remove("prompt")

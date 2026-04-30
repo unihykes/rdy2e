@@ -4,6 +4,7 @@ param()
 
 <#
 // beforeShellExecution 输入
+// session_id（可选）：此会话唯一标识，常与 conversation_id 相同；Cursor 可能在 body 中附带。
 {
   "command": "<full terminal command>",
   "cwd": "<current working directory>",
@@ -11,6 +12,7 @@ param()
 }
 #>
 class R2eHookBeforeShellExecutionInputBody {
+  [string]$session_id
   [string]$command
   [string]$cwd
   [bool]$sandbox
@@ -22,7 +24,8 @@ class R2eHookBeforeShellExecutionInputBody {
 
   [string] ToJsonString() {
     $h = @{
-      command = $this.command
+      session_id = $this.session_id
+      command    = $this.command
       cwd     = $this.cwd
       sandbox = $this.sandbox
     }
@@ -42,6 +45,7 @@ function Get-HookInputBody {
 
   if (-not $head.IsValidJson) {
     $inst = [R2eHookBeforeShellExecutionInputBody]::new()
+    Set-HookFallbackJsonQuotedField $inst session_id $bodyStr -Convert { param($cap) Get-PrettyUuid -Id $cap }
     Set-HookFallbackJsonQuotedField $inst command $bodyStr -Convert { param($cap) '...' }
     Set-HookFallbackJsonQuotedField $inst cwd $bodyStr
     Set-HookFallbackJsonBoolField $inst sandbox $bodyStr
@@ -52,6 +56,13 @@ function Get-HookInputBody {
   try {
     $obj = $bodyStr | ConvertFrom-Json
     $inst = [R2eHookBeforeShellExecutionInputBody]::new()
+    if ($obj.PSObject.Properties["session_id"]) {
+      $v = $obj.session_id
+      if ($null -ne $v) {
+        $inst.session_id = Get-PrettyUuid -Id ([string]$v)
+      }
+      $obj.PSObject.Properties.Remove("session_id")
+    }
     if ($obj.PSObject.Properties["command"]) {
       $inst.command = '...'
       $obj.PSObject.Properties.Remove("command")

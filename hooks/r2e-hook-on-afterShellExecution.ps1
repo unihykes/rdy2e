@@ -4,12 +4,14 @@ param()
 
 <#
 Field	Type	Description
+session_id	string (opt)	此会话唯一标识，常与 conversation_id 相同；Cursor 可能在 body 中附带
 command	string	执行的完整终端命令
 output	string	从终端捕获的完整输出
 duration	number	执行该 shell 命令所花费的时间（毫秒），不包括等待审批的时间
 sandbox	boolean	该命令是否在沙盒环境中运行
 #>
 class R2eHookAfterShellExecutionInputBody {
+  [string]$session_id
   [string]$command
   [string]$output
   [long]$duration
@@ -23,8 +25,9 @@ class R2eHookAfterShellExecutionInputBody {
 
   [string] ToJsonString() {
     $h = @{
-      command  = $this.command
-      output   = $this.output
+      session_id = $this.session_id
+      command    = $this.command
+      output     = $this.output
       duration = $this.duration
       sandbox  = $this.sandbox
     }
@@ -70,6 +73,7 @@ function Get-HookInputBody {
 
   if (-not $head.IsValidJson) {
     $inst = [R2eHookAfterShellExecutionInputBody]::new()
+    Set-HookFallbackJsonQuotedField $inst session_id $bodyStr -Convert { param($cap) Get-PrettyUuid -Id $cap }
     Set-HookFallbackJsonQuotedField $inst command $bodyStr -Convert { param($cap) '...' }
     Set-HookFallbackJsonQuotedField $inst output $bodyStr -Convert { param($cap) '...' }
     Set-AfterShellHookFallbackJsonLongField $inst duration $bodyStr
@@ -82,6 +86,13 @@ function Get-HookInputBody {
     $obj = $bodyStr | ConvertFrom-Json
     $inst = [R2eHookAfterShellExecutionInputBody]::new()
 
+    if ($obj.PSObject.Properties["session_id"]) {
+      $v = $obj.session_id
+      if ($null -ne $v) {
+        $inst.session_id = Get-PrettyUuid -Id ([string]$v)
+      }
+      $obj.PSObject.Properties.Remove("session_id")
+    }
     if ($obj.PSObject.Properties["command"]) {
       $inst.command = '...'
       $obj.PSObject.Properties.Remove("command")

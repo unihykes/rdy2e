@@ -4,12 +4,14 @@ param()
 
 <#
 // Input
+// session_id（可选）：此会话唯一标识，常与 conversation_id 相同。
 {
   "status": "completed" | "aborted" | "error",
   "loop_count": 0
 }
 #>
 class R2eHookStopInputBody {
+  [string]$session_id
   [string]$status
   [int]$loop_count
   [hashtable]$others
@@ -20,6 +22,7 @@ class R2eHookStopInputBody {
 
   [string] ToJsonString() {
     $h = @{
+      session_id  = $this.session_id
       status      = $this.status
       loop_count  = $this.loop_count
     }
@@ -65,6 +68,7 @@ function Get-HookInputBody {
 
   if (-not $head.IsValidJson) {
     $inst = [R2eHookStopInputBody]::new()
+    Set-HookFallbackJsonQuotedField $inst session_id $bodyStr -Convert { param($cap) Get-PrettyUuid -Id $cap }
     Set-HookFallbackJsonQuotedField $inst status $bodyStr
     Set-StopHookFallbackJsonIntField $inst loop_count $bodyStr
     $inst.others = @{ _errorMessage = "invalid json" }
@@ -75,6 +79,13 @@ function Get-HookInputBody {
     $obj = $bodyStr | ConvertFrom-Json
     $inst = [R2eHookStopInputBody]::new()
 
+    if ($obj.PSObject.Properties["session_id"]) {
+      $v = $obj.session_id
+      if ($null -ne $v) {
+        $inst.session_id = Get-PrettyUuid -Id ([string]$v)
+      }
+      $obj.PSObject.Properties.Remove("session_id")
+    }
     if ($obj.PSObject.Properties["status"]) {
       $v = $obj.status
       if ($null -ne $v) {

@@ -4,6 +4,7 @@ param()
 
 <#
 输入字段	类型	描述
+session_id	string(opt)	此会话唯一标识，常与 conversation_id 相同
 trigger	string	触发压缩的方式："auto" 或 "manual"
 context_usage_percent	number	当前上下文窗口的使用百分比 (0-100)
 context_tokens	number	当前上下文窗口中的 token 数
@@ -13,6 +14,7 @@ messages_to_compact	number	将要被汇总的消息数量
 is_first_compaction	boolean	此会话是否为首次执行压缩
 #>
 class R2eHookPreCompactInputBody {
+  [string]$session_id
   [string]$trigger
   [double]$context_usage_percent
   [long]$context_tokens
@@ -33,6 +35,7 @@ class R2eHookPreCompactInputBody {
 
   [string] ToJsonString() {
     $h = @{
+      session_id              = $this.session_id
       trigger                 = $this.trigger
       context_usage_percent   = $this.context_usage_percent
       context_tokens          = $this.context_tokens
@@ -135,6 +138,7 @@ function Get-HookInputBody {
 
   if (-not $head.IsValidJson) {
     $inst = [R2eHookPreCompactInputBody]::new()
+    Set-HookFallbackJsonQuotedField $inst session_id $bodyStr -Convert { param($cap) Get-PrettyUuid -Id $cap }
     Set-HookFallbackJsonQuotedField $inst trigger $bodyStr
     Set-PreCompactHookFallbackJsonDoubleField $inst context_usage_percent $bodyStr
     Set-PreCompactHookFallbackJsonLongField $inst context_tokens $bodyStr
@@ -150,6 +154,13 @@ function Get-HookInputBody {
     $obj = $bodyStr | ConvertFrom-Json
     $inst = [R2eHookPreCompactInputBody]::new()
 
+    if ($obj.PSObject.Properties["session_id"]) {
+      $v = $obj.session_id
+      if ($null -ne $v) {
+        $inst.session_id = Get-PrettyUuid -Id ([string]$v)
+      }
+      $obj.PSObject.Properties.Remove("session_id")
+    }
     if ($obj.PSObject.Properties["trigger"]) {
       $v = $obj.trigger
       if ($null -ne $v) {

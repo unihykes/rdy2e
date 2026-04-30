@@ -4,12 +4,14 @@ param()
 
 <#
 字段	类型	描述
+session_id	string (opt)	此会话唯一标识，常与 conversation_id 相同
 tool_name	string	执行的 MCP 工具名称
 tool_input	string	传递给该工具的 JSON 参数字符串
 result_json	string	工具响应结果的 JSON 字符串
 duration	number	工具执行耗时 (毫秒) ，不包括等待审批的时间
 #>
 class R2eHookAfterMCPExecutionInputBody {
+  [string]$session_id
   [string]$tool_name
   [hashtable]$tool_input
   [string]$result_json
@@ -22,6 +24,7 @@ class R2eHookAfterMCPExecutionInputBody {
 
   [string] ToJsonString() {
     $h = @{
+      session_id  = $this.session_id
       tool_name   = $this.tool_name
       tool_input  = $this.tool_input
       result_json = $this.result_json
@@ -69,6 +72,7 @@ function Get-HookInputBody {
 
   if (-not $head.IsValidJson) {
     $inst = [R2eHookAfterMCPExecutionInputBody]::new()
+    Set-HookFallbackJsonQuotedField $inst session_id $bodyStr -Convert { param($cap) Get-PrettyUuid -Id $cap }
     Set-HookFallbackJsonQuotedField $inst tool_name $bodyStr
     Set-HookFallbackJsonQuotedField $inst result_json $bodyStr
     Set-AfterMcpHookFallbackJsonLongField $inst duration $bodyStr
@@ -80,6 +84,13 @@ function Get-HookInputBody {
     $obj = $bodyStr | ConvertFrom-Json
     $inst = [R2eHookAfterMCPExecutionInputBody]::new()
 
+    if ($obj.PSObject.Properties["session_id"]) {
+      $v = $obj.session_id
+      if ($null -ne $v) {
+        $inst.session_id = Get-PrettyUuid -Id ([string]$v)
+      }
+      $obj.PSObject.Properties.Remove("session_id")
+    }
     if ($obj.PSObject.Properties["tool_name"]) {
       $inst.tool_name = [string]$obj.tool_name
       $obj.PSObject.Properties.Remove("tool_name")

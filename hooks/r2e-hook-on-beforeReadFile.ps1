@@ -15,11 +15,13 @@ param()
   ]
 }
 输入字段	类型	描述
+session_id	string(opt)	此会话唯一标识，常与 conversation_id 相同
 file_path	string	将要读取的文件的绝对路径
 content	string	文件的完整内容
 attachments	array	与提示关联的上下文附件。每个条目都包含一个 type ("file" 或 "rule") 和一个 file_path。
 #>
 class R2eHookBeforeReadFileInputBody {
+  [string]$session_id
   [string]$file_path
   [string]$content
   [System.Object[]]$attachments
@@ -31,6 +33,7 @@ class R2eHookBeforeReadFileInputBody {
 
   [string] ToJsonString() {
     $h = @{
+      session_id  = $this.session_id
       file_path   = $this.file_path
       content     = $this.content
       attachments = $this.attachments
@@ -51,6 +54,7 @@ function Get-HookInputBody {
 
   if (-not $head.IsValidJson) {
     $inst = [R2eHookBeforeReadFileInputBody]::new()
+    Set-HookFallbackJsonQuotedField $inst session_id $bodyStr -Convert { param($cap) Get-PrettyUuid -Id $cap }
     Set-HookFallbackJsonQuotedField $inst file_path $bodyStr
     Set-HookFallbackJsonQuotedField $inst content $bodyStr -Convert { param($cap) '...' }
     $inst.others = @{ _errorMessage = "invalid json" }
@@ -61,6 +65,13 @@ function Get-HookInputBody {
     $obj = $bodyStr | ConvertFrom-Json
     $inst = [R2eHookBeforeReadFileInputBody]::new()
 
+    if ($obj.PSObject.Properties["session_id"]) {
+      $v = $obj.session_id
+      if ($null -ne $v) {
+        $inst.session_id = Get-PrettyUuid -Id ([string]$v)
+      }
+      $obj.PSObject.Properties.Remove("session_id")
+    }
     if ($obj.PSObject.Properties["file_path"]) {
       $v = $obj.file_path
       if ($null -ne $v) {

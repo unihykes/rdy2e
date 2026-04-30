@@ -4,6 +4,7 @@ param()
 
 <#
 // beforeMCPExecution 输入
+// session_id（可选）：此会话唯一标识，常与 conversation_id 相同。
 {
   "tool_name": "<tool name>",
   "tool_input": "<json params>"
@@ -14,6 +15,7 @@ param()
 { "command": "<command string>" }
 #>
 class R2eHookBeforeMCPExecutionInputBody {
+  [string]$session_id
   [string]$tool_name
   [hashtable]$tool_input
   [string]$url
@@ -22,6 +24,7 @@ class R2eHookBeforeMCPExecutionInputBody {
 
   [string] ToJsonString() {
     $h = @{
+      session_id = $this.session_id
       tool_name  = $this.tool_name
       tool_input = $this.tool_input
       url        = $this.url
@@ -43,6 +46,7 @@ function Get-HookInputBody {
 
   if (-not $head.IsValidJson) {
     $inst = [R2eHookBeforeMCPExecutionInputBody]::new()
+    Set-HookFallbackJsonQuotedField $inst session_id $bodyStr -Convert { param($cap) Get-PrettyUuid -Id $cap }
     Set-HookFallbackJsonQuotedField $inst tool_name $bodyStr
     Set-HookFallbackJsonQuotedField $inst url $bodyStr
     Set-HookFallbackJsonQuotedField $inst command $bodyStr -Convert { param($cap) '...' }
@@ -54,6 +58,13 @@ function Get-HookInputBody {
     $obj = $bodyStr | ConvertFrom-Json
     $inst = [R2eHookBeforeMCPExecutionInputBody]::new()
 
+    if ($obj.PSObject.Properties["session_id"]) {
+      $v = $obj.session_id
+      if ($null -ne $v) {
+        $inst.session_id = Get-PrettyUuid -Id ([string]$v)
+      }
+      $obj.PSObject.Properties.Remove("session_id")
+    }
     if ($obj.PSObject.Properties["tool_name"]) {
       $inst.tool_name = [string]$obj.tool_name
       $obj.PSObject.Properties.Remove("tool_name")

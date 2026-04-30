@@ -4,12 +4,14 @@ param()
 
 <#
 // 输入
+// session_id（可选）：此会话唯一标识，常与 conversation_id 相同。
 {
   "text": "<fully aggregated thinking text>",
   "duration_ms": 5000
 }
 #>
 class R2eHookAfterAgentThoughtInputBody {
+  [string]$session_id
   [string]$text
   [long]$duration_ms
   [hashtable]$others
@@ -20,6 +22,7 @@ class R2eHookAfterAgentThoughtInputBody {
 
   [string] ToJsonString() {
     $h = @{
+      session_id  = $this.session_id
       text        = $this.text
       duration_ms = $this.duration_ms
     }
@@ -65,6 +68,7 @@ function Get-HookInputBody {
 
   if (-not $head.IsValidJson) {
     $inst = [R2eHookAfterAgentThoughtInputBody]::new()
+    Set-HookFallbackJsonQuotedField $inst session_id $bodyStr -Convert { param($cap) Get-PrettyUuid -Id $cap }
     Set-HookFallbackJsonQuotedField $inst text $bodyStr -Convert { param($cap) '...' }
     Set-AfterAgentThoughtHookFallbackJsonLongField $inst duration_ms $bodyStr
     $inst.others = @{ _errorMessage = "invalid json" }
@@ -75,6 +79,13 @@ function Get-HookInputBody {
     $obj = $bodyStr | ConvertFrom-Json
     $inst = [R2eHookAfterAgentThoughtInputBody]::new()
 
+    if ($obj.PSObject.Properties["session_id"]) {
+      $v = $obj.session_id
+      if ($null -ne $v) {
+        $inst.session_id = Get-PrettyUuid -Id ([string]$v)
+      }
+      $obj.PSObject.Properties.Remove("session_id")
+    }
     if ($obj.PSObject.Properties["text"]) {
       $inst.text = '...'
       $obj.PSObject.Properties.Remove("text")

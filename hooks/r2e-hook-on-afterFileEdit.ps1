@@ -4,12 +4,14 @@ param()
 
 <#
 // 输入
+// session_id（可选）：此会话唯一标识，常与 conversation_id 相同。
 {
   "file_path": "<absolute path>",
   "edits": [{ "old_string": "<search>", "new_string": "<replace>" }]
 }
 #>
 class R2eHookAfterFileEditInputBody {
+  [string]$session_id
   [string]$file_path
   [System.Object[]]$edits
   [hashtable]$others
@@ -20,7 +22,8 @@ class R2eHookAfterFileEditInputBody {
 
   [string] ToJsonString() {
     $h = @{
-      file_path = $this.file_path
+      session_id = $this.session_id
+      file_path  = $this.file_path
       edits     = $this.edits
     }
     if ($null -ne $this.others -and $this.others.Count -gt 0) {
@@ -39,6 +42,7 @@ function Get-HookInputBody {
 
   if (-not $head.IsValidJson) {
     $inst = [R2eHookAfterFileEditInputBody]::new()
+    Set-HookFallbackJsonQuotedField $inst session_id $bodyStr -Convert { param($cap) Get-PrettyUuid -Id $cap }
     Set-HookFallbackJsonQuotedField $inst file_path $bodyStr
     $inst.others = @{ _errorMessage = "invalid json" }
     return $head, $inst
@@ -48,6 +52,13 @@ function Get-HookInputBody {
     $obj = $bodyStr | ConvertFrom-Json
     $inst = [R2eHookAfterFileEditInputBody]::new()
 
+    if ($obj.PSObject.Properties["session_id"]) {
+      $v = $obj.session_id
+      if ($null -ne $v) {
+        $inst.session_id = Get-PrettyUuid -Id ([string]$v)
+      }
+      $obj.PSObject.Properties.Remove("session_id")
+    }
     if ($obj.PSObject.Properties["file_path"]) {
       $v = $obj.file_path
       if ($null -ne $v) {

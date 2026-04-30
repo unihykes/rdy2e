@@ -4,7 +4,6 @@
     "sessionStart": [
       {
         "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\hooks\\r2e-hook-on-sessionStart.ps1",
-        "type": "command",
         "timeout": 10,
         "failClosed": false
       }

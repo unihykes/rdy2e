@@ -4,6 +4,7 @@ param()
 
 <#
 输入字段	类型	描述	
+session_id	string(opt)	此会话唯一标识，常与 conversation_id 相同
 subagent_type	string	subagent 的类型：generalPurpose、explore、shell 等。	
 status	string	"completed"、"error" 或 "aborted"	
 task	string	提供给 subagent 的任务描述	
@@ -17,6 +18,7 @@ modified_files	string[]	subagent 修改过的文件
 agent_transcript_path	string	null	subagent 自身会话记录文件的路径 (与父对话分开)
 #>
 class R2eHookSubagentStopInputBody {
+  [string]$session_id
   [string]$subagent_type
   [string]$status
   [string]$task
@@ -40,6 +42,7 @@ class R2eHookSubagentStopInputBody {
 
   [string] ToJsonString() {
     $h = @{
+      session_id             = $this.session_id
       subagent_type          = $this.subagent_type
       status                 = $this.status
       task                   = $this.task
@@ -120,6 +123,7 @@ function Get-HookInputBody {
 
   if (-not $head.IsValidJson) {
     $inst = [R2eHookSubagentStopInputBody]::new()
+    Set-HookFallbackJsonQuotedField $inst session_id $bodyStr -Convert { param($cap) Get-PrettyUuid -Id $cap }
     Set-HookFallbackJsonQuotedField $inst subagent_type $bodyStr
     Set-HookFallbackJsonQuotedField $inst status $bodyStr
     Set-HookFallbackJsonQuotedField $inst task $bodyStr -Convert { param($cap) '...' }
@@ -138,6 +142,13 @@ function Get-HookInputBody {
     $obj = $bodyStr | ConvertFrom-Json
     $inst = [R2eHookSubagentStopInputBody]::new()
 
+    if ($obj.PSObject.Properties["session_id"]) {
+      $v = $obj.session_id
+      if ($null -ne $v) {
+        $inst.session_id = Get-PrettyUuid -Id ([string]$v)
+      }
+      $obj.PSObject.Properties.Remove("session_id")
+    }
     if ($obj.PSObject.Properties["subagent_type"]) {
       $inst.subagent_type = [string]$obj.subagent_type
       $obj.PSObject.Properties.Remove("subagent_type")
