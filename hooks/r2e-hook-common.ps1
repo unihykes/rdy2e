@@ -1,4 +1,4 @@
-# 对应 Cursor hook 官方文档中的基础字段（conversation_id、model 等）解析结果；事件正文为 JSON 字符串（各 hook 特有字段等）。
+# 对应 Cursor hook 官方文档中的基础字段（conversation_id、model 等
 class R2eHookInputHead {
   [string]$ConversationId = "-"
   [string]$GenerationId = "-"
@@ -8,16 +8,12 @@ class R2eHookInputHead {
   [bool]$IsValidJson = $true
 }
 
+# 统一 stdout 编码，避免中文输出乱码
 function Set-HookOutputUtf8 {
-  # 统一 stdout 编码，避免中文输出乱码
   [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 }
 
 function Get-HookInputHeadAndBody {
-  <#
-    从 stdin 读取 hook 原始 JSON（去掉可能存在的 UTF-8 BOM），并解析出两个值：
-    Head（R2eHookInputHead，官方基础字段）与 Body（脱敏/裁剪后的 JSON 或原文，事件特有部分）。
-  #>
   $stdin = [Console]::OpenStandardInput()
   $reader = New-Object System.IO.StreamReader($stdin, [System.Text.UTF8Encoding]::new($false), $true)
   $rawInput = $reader.ReadToEnd()
@@ -121,18 +117,12 @@ function Get-HookProjectDir {
 }
 
 function Log-HookEvent {
-  <#
-    写入一行到 r2e-hook-events.log，行首固定段在函数内基于 Head 统一生成：
-    [时间戳][工作区][conversationId 短][generationId 短][model][hook_event_name]
-  #>
   param(
     [Parameter(Mandatory = $true)]
     [R2eHookInputHead]$Head,
     [Parameter(Mandatory = $true)]
     [AllowEmptyString()]
-    [string]$BodyLog,
-    [Parameter(Mandatory = $true)]
-    [bool]$IsValidJson
+    [string]$BodyLog
   )
 
   $projectDir = Get-HookProjectDir
@@ -152,7 +142,7 @@ function Log-HookEvent {
   }
   $linePrefix = "[$timestamp][$($Head.WorkspaceName)][$conversationIdShort][$generationIdShort][$($Head.ModelName)][$($Head.HookEventName)]"
 
-  if ($IsValidJson) {
+  if ($Head.IsValidJson) {
     Add-Content -Path $filePath -Value "$LinePrefix $BodyLog" -Encoding utf8
   }
   else {
