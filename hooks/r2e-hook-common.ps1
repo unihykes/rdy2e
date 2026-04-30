@@ -127,6 +127,31 @@ function Set-HookFallbackWorkspaceNameFromRoots {
   }
 }
 
+<#
+  ConvertFrom-Json 得到的嵌套 JSON 对象（例如 tool_input、tool_output）为 PSCustomObject；
+  浅拷贝为 Hashtable 便于日志序列化；顶层字符串类型的 content 键改写为 "..."。
+#>
+function ConvertTo-R2eHookMaskedObjectHashtable {
+  param([AllowNull()] [object]$InputObject)
+
+  $ht = @{}
+  if ($null -eq $InputObject) {
+    return $ht
+  }
+  if ($InputObject -isnot [System.Management.Automation.PSCustomObject]) {
+    return $ht
+  }
+  foreach ($p in $InputObject.PSObject.Properties) {
+    $val = $p.Value
+    if ($p.Name -eq 'content' -and $null -ne $val -and $val -is [string]) {
+      $ht[$p.Name] = '...'
+    } else {
+      $ht[$p.Name] = $val
+    }
+  }
+  return $ht
+}
+
 function Get-HookInputHeadAndBody {
   $stdin = [Console]::OpenStandardInput()
   $reader = New-Object System.IO.StreamReader($stdin, [System.Text.UTF8Encoding]::new($false), $true)

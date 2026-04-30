@@ -11,20 +11,20 @@ param()
 输入字段        类型    描述
 session_id      string  此会话的唯一标识符 (与 conversation_id 相同)
 tool_name       string  即将使用的工具名称
-tool_input      object  工具调用参数对象
 tool_use_id     string  调用标识
 cwd             string  当前工作目录
 model           string  模型标识
 agent_message   string  agent 侧消息上下文
+tool_input      object  工具调用参数对象
 #>
 class R2eHookPreToolUseInputBody {
   [string]$session_id
   [string]$tool_name
-  [hashtable]$tool_input
   [string]$tool_use_id
   [string]$cwd
   [string]$model
   [string]$agent_message
+  [hashtable]$tool_input
   [hashtable]$others
   
   R2eHookPreToolUseInputBody() {
@@ -35,38 +35,17 @@ class R2eHookPreToolUseInputBody {
     $h = @{
       session_id    = $this.session_id
       tool_name     = $this.tool_name
-      tool_input    = $this.tool_input
-      tool_use_id   = $this.tool_use_id
       cwd           = $this.cwd
       model         = $this.model
       agent_message = $this.agent_message
+      tool_input    = $this.tool_input
+      tool_use_id   = $this.tool_use_id
     }
     if ($null -ne $this.others -and $this.others.Count -gt 0) {
       $h.others = $this.others
     }
     return ($h | ConvertTo-Json -Compress -Depth 20)
   }
-}
-
-function ConvertTo-R2eHookMaskedToolInputHashtable {
-  param([AllowNull()] [object]$ToolInput)
-
-  $ht = @{}
-  if ($null -eq $ToolInput) {
-    return $ht
-  }
-  if ($ToolInput -isnot [System.Management.Automation.PSCustomObject]) {
-    return $ht
-  }
-  foreach ($p in $ToolInput.PSObject.Properties) {
-    $val = $p.Value
-    if ($p.Name -eq 'content' -and $null -ne $val -and $val -is [string]) {
-      $ht[$p.Name] = '...'
-    } else {
-      $ht[$p.Name] = $val
-    }
-  }
-  return $ht
 }
 
 function Get-HookInputBody {
@@ -80,7 +59,7 @@ function Get-HookInputBody {
     $inst = [R2eHookPreToolUseInputBody]::new()
     Set-HookFallbackJsonQuotedField $inst session_id $bodyStr -Convert { param($cap) Get-PrettyUuid -Id $cap }
     Set-HookFallbackJsonQuotedField $inst tool_name $bodyStr
-    Set-HookFallbackJsonQuotedField $inst tool_use_id $bodyStr
+    Set-HookFallbackJsonQuotedField $inst tool_use_id $bodyStr -Convert { param($cap) Get-PrettyUuid -Id $cap }
     Set-HookFallbackJsonQuotedField $inst cwd $bodyStr
     Set-HookFallbackJsonQuotedField $inst model $bodyStr
     Set-HookFallbackJsonQuotedField $inst agent_message $bodyStr
@@ -99,12 +78,8 @@ function Get-HookInputBody {
       $inst.tool_name = [string]$obj.tool_name
       $obj.PSObject.Properties.Remove("tool_name")
     }
-    if ($obj.PSObject.Properties["tool_input"]) {
-      $inst.tool_input = ConvertTo-R2eHookMaskedToolInputHashtable -ToolInput $obj.tool_input
-      $obj.PSObject.Properties.Remove("tool_input")
-    }
     if ($obj.PSObject.Properties["tool_use_id"]) {
-      $inst.tool_use_id = [string]$obj.tool_use_id
+      $inst.tool_use_id = Get-PrettyUuid -Id ([string]$obj.tool_use_id)
       $obj.PSObject.Properties.Remove("tool_use_id")
     }
     if ($obj.PSObject.Properties["cwd"]) {
@@ -118,6 +93,10 @@ function Get-HookInputBody {
     if ($obj.PSObject.Properties["agent_message"]) {
       $inst.agent_message = [string]$obj.agent_message
       $obj.PSObject.Properties.Remove("agent_message")
+    }
+    if ($obj.PSObject.Properties["tool_input"]) {
+      $inst.tool_input = ConvertTo-R2eHookMaskedObjectHashtable -InputObject $obj.tool_input
+      $obj.PSObject.Properties.Remove("tool_input")
     }
     foreach ($prop in $obj.PSObject.Properties) {
       if ($null -eq $inst.others) {
