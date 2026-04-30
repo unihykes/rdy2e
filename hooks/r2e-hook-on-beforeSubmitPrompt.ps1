@@ -2,11 +2,32 @@ param()
 
 . (Join-Path $PSScriptRoot "r2e-hook-common.ps1")
 
+<#
+// 输入
+{
+  "prompt": "<user prompt text>",
+  "attachments": [
+    {
+      "type": "file" | "rule",
+      "file_path": "<absolute path>"
+    }
+  ]
+}
+#>
 class R2eHookBeforeSubmitPromptInputBody {
+  [string]$prompt
+  [System.Object[]]$attachments
   [hashtable]$others
 
+  R2eHookBeforeSubmitPromptInputBody() {
+    $this.attachments = @()
+  }
+
   [string] ToJsonString() {
-    $h = @{}
+    $h = @{
+      prompt      = $this.prompt
+      attachments = $this.attachments
+    }
     if ($null -ne $this.others -and $this.others.Count -gt 0) {
       $h.others = $this.others
     }
@@ -23,12 +44,24 @@ function Get-HookInputBody {
 
   if (-not $head.IsValidJson) {
     $inst = [R2eHookBeforeSubmitPromptInputBody]::new()
+    Set-HookFallbackJsonQuotedField $inst prompt $bodyStr -Convert { param($cap) '...' }
     $inst.others = @{ _errorMessage = "invalid json" }
     return $head, $inst
   }
+
   try {
     $obj = $bodyStr | ConvertFrom-Json
     $inst = [R2eHookBeforeSubmitPromptInputBody]::new()
+
+    if ($obj.PSObject.Properties["prompt"]) {
+      $inst.prompt = '...'
+      $obj.PSObject.Properties.Remove("prompt")
+    }
+    if ($obj.PSObject.Properties["attachments"]) {
+      $inst.attachments = ConvertFrom-R2eHookAttachmentsForLog -Attachments $obj.attachments
+      $obj.PSObject.Properties.Remove("attachments")
+    }
+
     foreach ($prop in $obj.PSObject.Properties) {
       if ($null -eq $inst.others) {
         $inst.others = @{}

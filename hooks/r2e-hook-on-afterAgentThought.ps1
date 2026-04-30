@@ -2,16 +2,58 @@ param()
 
 . (Join-Path $PSScriptRoot "r2e-hook-common.ps1")
 
+<#
+// 输入
+{
+  "text": "<fully aggregated thinking text>",
+  "duration_ms": 5000
+}
+#>
 class R2eHookAfterAgentThoughtInputBody {
+  [string]$text
+  [long]$duration_ms
   [hashtable]$others
 
+  R2eHookAfterAgentThoughtInputBody() {
+    $this.duration_ms = 0
+  }
+
   [string] ToJsonString() {
-    $h = @{}
+    $h = @{
+      text        = $this.text
+      duration_ms = $this.duration_ms
+    }
     if ($null -ne $this.others -and $this.others.Count -gt 0) {
       $h.others = $this.others
     }
     return ($h | ConvertTo-Json -Compress -Depth 20)
   }
+}
+
+function Set-AfterAgentThoughtHookFallbackJsonLongField {
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true, Position = 0)]
+    $Target,
+
+    [Parameter(Mandatory = $true, Position = 1)]
+    [ValidateNotNullOrEmpty()]
+    [string]$MemberName,
+
+    [Parameter(Mandatory = $true, Position = 2)]
+    [AllowEmptyString()]
+    [string]$Text,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateNotNullOrEmpty()]
+    [string]$JsonFieldName
+  )
+  $key = if ($PSBoundParameters.ContainsKey('JsonFieldName')) { $JsonFieldName } else { $MemberName }
+  $pattern = '"' + [regex]::Escape($key) + '"\s*:\s*(-?\d+)'
+  $cap = Get-HookFallbackRegexCapture -Text $Text -Pattern $pattern
+  if ($null -eq $cap) { return }
+
+  $Target.$MemberName = [long]$cap
 }
 
 function Get-HookInputBody {
@@ -23,12 +65,28 @@ function Get-HookInputBody {
 
   if (-not $head.IsValidJson) {
     $inst = [R2eHookAfterAgentThoughtInputBody]::new()
+    Set-HookFallbackJsonQuotedField $inst text $bodyStr -Convert { param($cap) '...' }
+    Set-AfterAgentThoughtHookFallbackJsonLongField $inst duration_ms $bodyStr
     $inst.others = @{ _errorMessage = "invalid json" }
     return $head, $inst
   }
+
   try {
     $obj = $bodyStr | ConvertFrom-Json
     $inst = [R2eHookAfterAgentThoughtInputBody]::new()
+
+    if ($obj.PSObject.Properties["text"]) {
+      $inst.text = '...'
+      $obj.PSObject.Properties.Remove("text")
+    }
+    if ($obj.PSObject.Properties["duration_ms"]) {
+      $v = $obj.duration_ms
+      if ($null -ne $v) {
+        $inst.duration_ms = [long]$v
+      }
+      $obj.PSObject.Properties.Remove("duration_ms")
+    }
+
     foreach ($prop in $obj.PSObject.Properties) {
       if ($null -eq $inst.others) {
         $inst.others = @{}

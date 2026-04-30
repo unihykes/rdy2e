@@ -42,37 +42,6 @@ class R2eHookBeforeReadFileInputBody {
   }
 }
 
-function ConvertFrom-R2eHookBeforeReadFileAttachmentsForLog {
-  param([AllowNull()] [object]$Attachments)
-
-  if ($null -eq $Attachments) {
-    return @()
-  }
-  if ($Attachments -is [System.Management.Automation.PSCustomObject]) {
-    $ht = @{}
-    foreach ($p in $Attachments.PSObject.Properties) {
-      $ht[$p.Name] = $p.Value
-    }
-    return @($ht)
-  }
-  if ($Attachments -isnot [System.Array]) {
-    return @(@{ _value = '...' })
-  }
-  $out = [System.Collections.ArrayList]@()
-  foreach ($item in $Attachments) {
-    if ($item -is [System.Management.Automation.PSCustomObject]) {
-      $ht = @{}
-      foreach ($p in $item.PSObject.Properties) {
-        $ht[$p.Name] = $p.Value
-      }
-      [void]$out.Add($ht)
-    } else {
-      [void]$out.Add(@{ _value = '...' })
-    }
-  }
-  return @($out)
-}
-
 function Get-HookInputBody {
   $head, $bodyStr = Get-HookInputHeadAndBody
 
@@ -104,7 +73,7 @@ function Get-HookInputBody {
       $obj.PSObject.Properties.Remove("content")
     }
     if ($obj.PSObject.Properties["attachments"]) {
-      $inst.attachments = ConvertFrom-R2eHookBeforeReadFileAttachmentsForLog -Attachments $obj.attachments
+      $inst.attachments = ConvertFrom-R2eHookAttachmentsForLog -Attachments $obj.attachments
       $obj.PSObject.Properties.Remove("attachments")
     }
 

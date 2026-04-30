@@ -2,11 +2,20 @@ param()
 
 . (Join-Path $PSScriptRoot "r2e-hook-common.ps1")
 
+<#
+// 输入
+{
+  "text": "<assistant final text>"
+}
+#>
 class R2eHookAfterAgentResponseInputBody {
+  [string]$text
   [hashtable]$others
 
   [string] ToJsonString() {
-    $h = @{}
+    $h = @{
+      text = $this.text
+    }
     if ($null -ne $this.others -and $this.others.Count -gt 0) {
       $h.others = $this.others
     }
@@ -23,12 +32,20 @@ function Get-HookInputBody {
 
   if (-not $head.IsValidJson) {
     $inst = [R2eHookAfterAgentResponseInputBody]::new()
+    Set-HookFallbackJsonQuotedField $inst text $bodyStr -Convert { param($cap) '...' }
     $inst.others = @{ _errorMessage = "invalid json" }
     return $head, $inst
   }
+
   try {
     $obj = $bodyStr | ConvertFrom-Json
     $inst = [R2eHookAfterAgentResponseInputBody]::new()
+
+    if ($obj.PSObject.Properties["text"]) {
+      $inst.text = '...'
+      $obj.PSObject.Properties.Remove("text")
+    }
+
     foreach ($prop in $obj.PSObject.Properties) {
       if ($null -eq $inst.others) {
         $inst.others = @{}

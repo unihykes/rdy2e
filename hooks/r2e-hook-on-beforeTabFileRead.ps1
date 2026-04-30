@@ -2,11 +2,23 @@ param()
 
 . (Join-Path $PSScriptRoot "r2e-hook-common.ps1")
 
+<#
+// 输入
+{
+  "file_path": "<absolute path>",
+  "content": "<file contents>"
+}
+#>
 class R2eHookBeforeTabFileReadInputBody {
+  [string]$file_path
+  [string]$content
   [hashtable]$others
 
   [string] ToJsonString() {
-    $h = @{}
+    $h = @{
+      file_path = $this.file_path
+      content   = $this.content
+    }
     if ($null -ne $this.others -and $this.others.Count -gt 0) {
       $h.others = $this.others
     }
@@ -23,12 +35,28 @@ function Get-HookInputBody {
 
   if (-not $head.IsValidJson) {
     $inst = [R2eHookBeforeTabFileReadInputBody]::new()
+    Set-HookFallbackJsonQuotedField $inst file_path $bodyStr
+    Set-HookFallbackJsonQuotedField $inst content $bodyStr -Convert { param($cap) '...' }
     $inst.others = @{ _errorMessage = "invalid json" }
     return $head, $inst
   }
+
   try {
     $obj = $bodyStr | ConvertFrom-Json
     $inst = [R2eHookBeforeTabFileReadInputBody]::new()
+
+    if ($obj.PSObject.Properties["file_path"]) {
+      $v = $obj.file_path
+      if ($null -ne $v) {
+        $inst.file_path = [string]$v
+      }
+      $obj.PSObject.Properties.Remove("file_path")
+    }
+    if ($obj.PSObject.Properties["content"]) {
+      $inst.content = '...'
+      $obj.PSObject.Properties.Remove("content")
+    }
+
     foreach ($prop in $obj.PSObject.Properties) {
       if ($null -eq $inst.others) {
         $inst.others = @{}

@@ -256,6 +256,40 @@ function ConvertFrom-R2eHookFileEditsForLog {
   return @($out)
 }
 
+<#
+  beforeReadFile / beforeSubmitPrompt：attachments 转为 Hashtable[]，便于日志序列化。
+#>
+function ConvertFrom-R2eHookAttachmentsForLog {
+  param([AllowNull()] [object]$Attachments)
+
+  if ($null -eq $Attachments) {
+    return @()
+  }
+  if ($Attachments -is [System.Management.Automation.PSCustomObject]) {
+    $ht = @{}
+    foreach ($p in $Attachments.PSObject.Properties) {
+      $ht[$p.Name] = $p.Value
+    }
+    return @($ht)
+  }
+  if ($Attachments -isnot [System.Array]) {
+    return @(@{ _value = '...' })
+  }
+  $out = [System.Collections.ArrayList]@()
+  foreach ($item in $Attachments) {
+    if ($item -is [System.Management.Automation.PSCustomObject]) {
+      $ht = @{}
+      foreach ($p in $item.PSObject.Properties) {
+        $ht[$p.Name] = $p.Value
+      }
+      [void]$out.Add($ht)
+    } else {
+      [void]$out.Add(@{ _value = '...' })
+    }
+  }
+  return @($out)
+}
+
 function Get-HookInputHeadAndBody {
   $stdin = [Console]::OpenStandardInput()
   $reader = New-Object System.IO.StreamReader($stdin, [System.Text.UTF8Encoding]::new($false), $true)
