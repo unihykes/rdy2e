@@ -256,7 +256,8 @@ function ConvertTo-R2eHookEventLogJson {
 
 <#
   ConvertFrom-Json 得到的嵌套 JSON 对象（例如 tool_input、tool_output）为 PSCustomObject；
-  浅拷贝为 Hashtable 便于日志序列化；顶层字符串类型的 content 键改写为 "..."。
+  拷贝为 Hashtable 便于日志序列化。字符串类型的 content、command 键改为 "..."；
+  嵌套的 PSCustomObject 与对象数组会递归做同样处理。
 #>
 function ConvertTo-R2eHookMaskedObjectHashtable {
   param([AllowNull()] [object]$InputObject)
@@ -270,8 +271,26 @@ function ConvertTo-R2eHookMaskedObjectHashtable {
   }
   foreach ($p in $InputObject.PSObject.Properties) {
     $val = $p.Value
-    if ($p.Name -eq 'content' -and $null -ne $val -and $val -is [string]) {
+    if ($null -eq $val) {
+      $ht[$p.Name] = $null
+    } elseif ($p.Name -eq 'content' -and $val -is [string]) {
       $ht[$p.Name] = '...'
+    } elseif ($p.Name -eq 'command' -and $val -is [string]) {
+      $ht[$p.Name] = '...'
+    } elseif ($val -is [System.Management.Automation.PSCustomObject]) {
+      $ht[$p.Name] = ConvertTo-R2eHookMaskedObjectHashtable -InputObject $val
+    } elseif ($val -is [System.Array]) {
+      $list = [System.Collections.ArrayList]@()
+      foreach ($el in $val) {
+        if ($null -eq $el) {
+          [void]$list.Add($null)
+        } elseif ($el -is [System.Management.Automation.PSCustomObject]) {
+          [void]$list.Add((ConvertTo-R2eHookMaskedObjectHashtable -InputObject $el))
+        } else {
+          [void]$list.Add($el)
+        }
+      }
+      $ht[$p.Name] = @($list)
     } else {
       $ht[$p.Name] = $val
     }
@@ -351,7 +370,8 @@ function Apply-R2eHookPostToolUseOutputFilePathDedup {
 
 <#
   ConvertFrom-Json 得到的 tool_input（PSCustomObject）浅拷贝为 Hashtable，便于日志序列化；
-  顶层键名为 context 的项统一改写为 "..."（与其它 hook 中对敏感字符串的处理一致）。
+  顶层键 context 改为 "..."；字符串类型的 command 改为 "..."（避免日志过长）；
+  嵌套 PSCustomObject 与对象数组递归处理。
   非 PSCustomObject 时返回空 Hashtable（字符串形式的 tool_input 由 ConvertFrom-R2eHookMcpToolInputForLog 先解析再传入）。
 #>
 function ConvertTo-R2eHookMaskedToolInputHashtable {
@@ -365,17 +385,36 @@ function ConvertTo-R2eHookMaskedToolInputHashtable {
     return $ht
   }
   foreach ($p in $InputObject.PSObject.Properties) {
-    if ($p.Name -eq 'context') {
+    $val = $p.Value
+    if ($null -eq $val) {
+      $ht[$p.Name] = $null
+    } elseif ($p.Name -eq 'context') {
       $ht[$p.Name] = '...'
+    } elseif ($p.Name -eq 'command' -and $val -is [string]) {
+      $ht[$p.Name] = '...'
+    } elseif ($val -is [System.Management.Automation.PSCustomObject]) {
+      $ht[$p.Name] = ConvertTo-R2eHookMaskedToolInputHashtable -InputObject $val
+    } elseif ($val -is [System.Array]) {
+      $list = [System.Collections.ArrayList]@()
+      foreach ($el in $val) {
+        if ($null -eq $el) {
+          [void]$list.Add($null)
+        } elseif ($el -is [System.Management.Automation.PSCustomObject]) {
+          [void]$list.Add((ConvertTo-R2eHookMaskedToolInputHashtable -InputObject $el))
+        } else {
+          [void]$list.Add($el)
+        }
+      }
+      $ht[$p.Name] = @($list)
     } else {
-      $ht[$p.Name] = $p.Value
+      $ht[$p.Name] = $val
     }
   }
   return $ht
 }
 
 <#
-  before/after MCP hook：将 tool_input（对象或 JSON 字符串）转为带 context 脱敏的 Hashtable，供日志序列化。
+  before/after MCP hook：将 tool_input（对象或 JSON 字符串）转为带 context、command 脱敏的 Hashtable，供日志序列化。
 #>
 function ConvertFrom-R2eHookMcpToolInputForLog {
   param([AllowNull()] [object]$ToolInput)
