@@ -2,16 +2,128 @@ param()
 
 . (Join-Path $PSScriptRoot "r2e-hook-common.ps1")
 
+<#
+输入字段	类型	描述
+trigger	string	触发压缩的方式："auto" 或 "manual"
+context_usage_percent	number	当前上下文窗口的使用百分比 (0-100)
+context_tokens	number	当前上下文窗口中的 token 数
+context_window_size	number	最大上下文窗口大小 (按 token 计)
+message_count	number	会话中的消息数量
+messages_to_compact	number	将要被汇总的消息数量
+is_first_compaction	boolean	此会话是否为首次执行压缩
+#>
 class R2eHookPreCompactInputBody {
+  [string]$trigger
+  [double]$context_usage_percent
+  [long]$context_tokens
+  [long]$context_window_size
+  [int]$message_count
+  [int]$messages_to_compact
+  [bool]$is_first_compaction
   [hashtable]$others
 
+  R2eHookPreCompactInputBody() {
+    $this.context_usage_percent = 0.0
+    $this.context_tokens = 0
+    $this.context_window_size = 0
+    $this.message_count = 0
+    $this.messages_to_compact = 0
+    $this.is_first_compaction = $false
+  }
+
   [string] ToJsonString() {
-    $h = @{}
+    $h = @{
+      trigger                 = $this.trigger
+      context_usage_percent   = $this.context_usage_percent
+      context_tokens          = $this.context_tokens
+      context_window_size     = $this.context_window_size
+      message_count           = $this.message_count
+      messages_to_compact     = $this.messages_to_compact
+      is_first_compaction     = $this.is_first_compaction
+    }
     if ($null -ne $this.others -and $this.others.Count -gt 0) {
       $h.others = $this.others
     }
     return ($h | ConvertTo-Json -Compress -Depth 20)
   }
+}
+
+function Set-PreCompactHookFallbackJsonDoubleField {
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true, Position = 0)]
+    $Target,
+
+    [Parameter(Mandatory = $true, Position = 1)]
+    [ValidateNotNullOrEmpty()]
+    [string]$MemberName,
+
+    [Parameter(Mandatory = $true, Position = 2)]
+    [AllowEmptyString()]
+    [string]$Text,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateNotNullOrEmpty()]
+    [string]$JsonFieldName
+  )
+  $key = if ($PSBoundParameters.ContainsKey('JsonFieldName')) { $JsonFieldName } else { $MemberName }
+  $pattern = '"' + [regex]::Escape($key) + '"\s*:\s*(-?\d+(?:\.\d+)?)'
+  $cap = Get-HookFallbackRegexCapture -Text $Text -Pattern $pattern
+  if ($null -eq $cap) { return }
+
+  $Target.$MemberName = [double]$cap
+}
+
+function Set-PreCompactHookFallbackJsonLongField {
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true, Position = 0)]
+    $Target,
+
+    [Parameter(Mandatory = $true, Position = 1)]
+    [ValidateNotNullOrEmpty()]
+    [string]$MemberName,
+
+    [Parameter(Mandatory = $true, Position = 2)]
+    [AllowEmptyString()]
+    [string]$Text,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateNotNullOrEmpty()]
+    [string]$JsonFieldName
+  )
+  $key = if ($PSBoundParameters.ContainsKey('JsonFieldName')) { $JsonFieldName } else { $MemberName }
+  $pattern = '"' + [regex]::Escape($key) + '"\s*:\s*(-?\d+)'
+  $cap = Get-HookFallbackRegexCapture -Text $Text -Pattern $pattern
+  if ($null -eq $cap) { return }
+
+  $Target.$MemberName = [long]$cap
+}
+
+function Set-PreCompactHookFallbackJsonIntField {
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true, Position = 0)]
+    $Target,
+
+    [Parameter(Mandatory = $true, Position = 1)]
+    [ValidateNotNullOrEmpty()]
+    [string]$MemberName,
+
+    [Parameter(Mandatory = $true, Position = 2)]
+    [AllowEmptyString()]
+    [string]$Text,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateNotNullOrEmpty()]
+    [string]$JsonFieldName
+  )
+  $key = if ($PSBoundParameters.ContainsKey('JsonFieldName')) { $JsonFieldName } else { $MemberName }
+  $pattern = '"' + [regex]::Escape($key) + '"\s*:\s*(-?\d+)'
+  $cap = Get-HookFallbackRegexCapture -Text $Text -Pattern $pattern
+  if ($null -eq $cap) { return }
+
+  $Target.$MemberName = [int]$cap
 }
 
 function Get-HookInputBody {
@@ -23,12 +135,68 @@ function Get-HookInputBody {
 
   if (-not $head.IsValidJson) {
     $inst = [R2eHookPreCompactInputBody]::new()
+    Set-HookFallbackJsonQuotedField $inst trigger $bodyStr
+    Set-PreCompactHookFallbackJsonDoubleField $inst context_usage_percent $bodyStr
+    Set-PreCompactHookFallbackJsonLongField $inst context_tokens $bodyStr
+    Set-PreCompactHookFallbackJsonLongField $inst context_window_size $bodyStr
+    Set-PreCompactHookFallbackJsonIntField $inst message_count $bodyStr
+    Set-PreCompactHookFallbackJsonIntField $inst messages_to_compact $bodyStr
+    Set-HookFallbackJsonBoolField $inst is_first_compaction $bodyStr
     $inst.others = @{ _errorMessage = "invalid json" }
     return $head, $inst
   }
+
   try {
     $obj = $bodyStr | ConvertFrom-Json
     $inst = [R2eHookPreCompactInputBody]::new()
+
+    if ($obj.PSObject.Properties["trigger"]) {
+      $v = $obj.trigger
+      if ($null -ne $v) {
+        $inst.trigger = [string]$v
+      }
+      $obj.PSObject.Properties.Remove("trigger")
+    }
+    if ($obj.PSObject.Properties["context_usage_percent"]) {
+      $v = $obj.context_usage_percent
+      if ($null -ne $v) {
+        $inst.context_usage_percent = [double]$v
+      }
+      $obj.PSObject.Properties.Remove("context_usage_percent")
+    }
+    if ($obj.PSObject.Properties["context_tokens"]) {
+      $v = $obj.context_tokens
+      if ($null -ne $v) {
+        $inst.context_tokens = [long]$v
+      }
+      $obj.PSObject.Properties.Remove("context_tokens")
+    }
+    if ($obj.PSObject.Properties["context_window_size"]) {
+      $v = $obj.context_window_size
+      if ($null -ne $v) {
+        $inst.context_window_size = [long]$v
+      }
+      $obj.PSObject.Properties.Remove("context_window_size")
+    }
+    if ($obj.PSObject.Properties["message_count"]) {
+      $v = $obj.message_count
+      if ($null -ne $v) {
+        $inst.message_count = [int]$v
+      }
+      $obj.PSObject.Properties.Remove("message_count")
+    }
+    if ($obj.PSObject.Properties["messages_to_compact"]) {
+      $v = $obj.messages_to_compact
+      if ($null -ne $v) {
+        $inst.messages_to_compact = [int]$v
+      }
+      $obj.PSObject.Properties.Remove("messages_to_compact")
+    }
+    if ($obj.PSObject.Properties["is_first_compaction"]) {
+      $inst.is_first_compaction = [bool]$obj.is_first_compaction
+      $obj.PSObject.Properties.Remove("is_first_compaction")
+    }
+
     foreach ($prop in $obj.PSObject.Properties) {
       if ($null -eq $inst.others) {
         $inst.others = @{}

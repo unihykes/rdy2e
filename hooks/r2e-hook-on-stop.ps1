@@ -2,16 +2,58 @@ param()
 
 . (Join-Path $PSScriptRoot "r2e-hook-common.ps1")
 
+<#
+// Input
+{
+  "status": "completed" | "aborted" | "error",
+  "loop_count": 0
+}
+#>
 class R2eHookStopInputBody {
+  [string]$status
+  [int]$loop_count
   [hashtable]$others
 
+  R2eHookStopInputBody() {
+    $this.loop_count = 0
+  }
+
   [string] ToJsonString() {
-    $h = @{}
+    $h = @{
+      status      = $this.status
+      loop_count  = $this.loop_count
+    }
     if ($null -ne $this.others -and $this.others.Count -gt 0) {
       $h.others = $this.others
     }
     return ($h | ConvertTo-Json -Compress -Depth 20)
   }
+}
+
+function Set-StopHookFallbackJsonIntField {
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true, Position = 0)]
+    $Target,
+
+    [Parameter(Mandatory = $true, Position = 1)]
+    [ValidateNotNullOrEmpty()]
+    [string]$MemberName,
+
+    [Parameter(Mandatory = $true, Position = 2)]
+    [AllowEmptyString()]
+    [string]$Text,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateNotNullOrEmpty()]
+    [string]$JsonFieldName
+  )
+  $key = if ($PSBoundParameters.ContainsKey('JsonFieldName')) { $JsonFieldName } else { $MemberName }
+  $pattern = '"' + [regex]::Escape($key) + '"\s*:\s*(-?\d+)'
+  $cap = Get-HookFallbackRegexCapture -Text $Text -Pattern $pattern
+  if ($null -eq $cap) { return }
+
+  $Target.$MemberName = [int]$cap
 }
 
 function Get-HookInputBody {
@@ -23,12 +65,31 @@ function Get-HookInputBody {
 
   if (-not $head.IsValidJson) {
     $inst = [R2eHookStopInputBody]::new()
+    Set-HookFallbackJsonQuotedField $inst status $bodyStr
+    Set-StopHookFallbackJsonIntField $inst loop_count $bodyStr
     $inst.others = @{ _errorMessage = "invalid json" }
     return $head, $inst
   }
+
   try {
     $obj = $bodyStr | ConvertFrom-Json
     $inst = [R2eHookStopInputBody]::new()
+
+    if ($obj.PSObject.Properties["status"]) {
+      $v = $obj.status
+      if ($null -ne $v) {
+        $inst.status = [string]$v
+      }
+      $obj.PSObject.Properties.Remove("status")
+    }
+    if ($obj.PSObject.Properties["loop_count"]) {
+      $v = $obj.loop_count
+      if ($null -ne $v) {
+        $inst.loop_count = [int]$v
+      }
+      $obj.PSObject.Properties.Remove("loop_count")
+    }
+
     foreach ($prop in $obj.PSObject.Properties) {
       if ($null -eq $inst.others) {
         $inst.others = @{}
